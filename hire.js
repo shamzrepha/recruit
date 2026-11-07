@@ -43,29 +43,34 @@
      ========================================================================= */
   var tabIntakeBtn = $('tab-intake-btn');
   var tabScreenBtn = $('tab-screen-btn');
+  var tabJobsBtn = $('tab-jobs-btn');
   var sectionIntake = $('section-intake');
   var sectionScreen = $('section-screen');
+  var sectionJobs = $('section-jobs');
 
   function switchTab(target) {
-    if (target === 'intake') {
-      tabIntakeBtn.classList.add('active');
-      tabIntakeBtn.setAttribute('aria-selected', 'true');
-      tabScreenBtn.classList.remove('active');
-      tabScreenBtn.setAttribute('aria-selected', 'false');
-      sectionIntake.hidden = false;
-      sectionScreen.hidden = true;
-    } else {
-      tabScreenBtn.classList.add('active');
-      tabScreenBtn.setAttribute('aria-selected', 'true');
-      tabIntakeBtn.classList.remove('active');
-      tabIntakeBtn.setAttribute('aria-selected', 'false');
-      sectionScreen.hidden = false;
-      sectionIntake.hidden = true;
+    var tabs = [
+      { id: 'intake', btn: tabIntakeBtn, panel: sectionIntake },
+      { id: 'screen', btn: tabScreenBtn, panel: sectionScreen },
+      { id: 'jobs', btn: tabJobsBtn, panel: sectionJobs }
+    ];
+
+    tabs.forEach(function (t) {
+      if (!t.btn || !t.panel) return;
+      var isActive = t.id === target;
+      t.btn.classList.toggle('active', isActive);
+      t.btn.setAttribute('aria-selected', String(isActive));
+      t.panel.hidden = !isActive;
+    });
+
+    if (target === 'jobs') {
+      loadRecruiterJobs();
     }
   }
 
-  tabIntakeBtn.addEventListener('click', function () { switchTab('intake'); });
-  tabScreenBtn.addEventListener('click', function () { switchTab('screen'); });
+  if (tabIntakeBtn) tabIntakeBtn.addEventListener('click', function () { switchTab('intake'); });
+  if (tabScreenBtn) tabScreenBtn.addEventListener('click', function () { switchTab('screen'); });
+  if (tabJobsBtn) tabJobsBtn.addEventListener('click', function () { switchTab('jobs'); });
 
   /* =========================================================================
      TAB 1: RECRUITER AI INTAKE CHAT
@@ -294,6 +299,8 @@
         phone: c.phone || '',
         email: c.email || '',
         consent: Boolean(c.consent),
+        roadmapProfile: c.roadmapProfile || null,
+        rankingPercentile: c.rankingPercentile || null,
         interviewSummary: c.interviewSummary || null,
         interviewConfidence: c.interviewConfidence || null,
         interviewTranscript: c.interviewTranscript || null
@@ -327,6 +334,8 @@
           phone: c.phone || '',
           email: c.email || '',
           consent: Boolean(c.consent),
+          roadmapProfile: c.roadmapProfile || null,
+          rankingPercentile: c.rankingPercentile || null,
           interviewSummary: c.interviewSummary || null,
           interviewConfidence: c.interviewConfidence || null,
           interviewTranscript: c.interviewTranscript || null
@@ -355,6 +364,8 @@
           phone: c.phone || '',
           email: c.email || '',
           consent: Boolean(c.consent),
+          roadmapProfile: c.roadmapProfile || null,
+          rankingPercentile: c.rankingPercentile || null,
           interviewSummary: c.interviewSummary || null,
           interviewConfidence: c.interviewConfidence || null,
           interviewTranscript: c.interviewTranscript || null
@@ -396,6 +407,8 @@
       res.phone = orig.phone || '';
       res.email = orig.email || '';
       res.consent = Boolean(orig.consent);
+      res.roadmapProfile = orig.roadmapProfile || null;
+      res.rankingPercentile = orig.rankingPercentile || null;
       res.interviewSummary = orig.interviewSummary || null;
       res.interviewConfidence = orig.interviewConfidence || null;
       res.interviewTranscript = orig.interviewTranscript || null;
@@ -538,10 +551,22 @@
           '</div>';
         }
 
+        var roadmapBtn = r.roadmapProfile ? (
+          '<div style="margin:10px 0">' +
+            '<button type="button" class="btn-quiet btn-roadmap" data-act="view-roadmap" data-id="' + esc(r.id) + '">' +
+              '<svg class="ic" aria-hidden="true"><use href="#i-briefcase"/></svg> View Career Roadmap Profile' +
+            '</button>' +
+          '</div>'
+        ) : '';
+
         var prevEl = document.querySelector('details.person[data-id="' + r.id + '"]');
         var wasOpen = Boolean(state.revealedContacts[r.id] || (prevEl && prevEl.open));
 
         var decided = state.decisions[r.id] || '';
+        var rankBadge = r.rankingPercentile
+          ? '<span class="tag ' + (r.rankingPercentile.includes('5%') ? 'strong' : 'look') + '" style="margin-left:4px">🏆 ' + esc(r.rankingPercentile) + '</span>'
+          : '';
+
         return '<li>' +
           '<details class="person" data-id="' + esc(r.id) + '"' + (wasOpen ? ' open' : '') + '>' +
             '<summary>' +
@@ -549,6 +574,7 @@
               '<span class="who"><span class="avatar" aria-hidden="true">' + esc(initials(r.name)) + '</span>' +
                 '<span class="who-text"><strong>' + esc(r.name) + '</strong>' +
                   '<span class="who-meta"><span class="tag ' + sug.code + '">' + esc(sug.text) + '</span>' +
+                  rankBadge +
                   '<span class="decided" data-for="' + esc(r.id) + '">' + (decided ? esc(DECISION_LABEL[decided]) : '') + '</span></span>' +
                   breakdownHtml +
                 '</span></span>' +
@@ -560,6 +586,7 @@
               '<p class="suggest">' + esc(r.summary || '') + '</p>' +
               '<table class="checks"><thead><tr><th>Requirement</th><th>Status</th><th>Evidence from the CV</th></tr></thead><tbody>' + trs + '</tbody></table>' +
               qs +
+              roadmapBtn +
               interviewHtml +
               '<div class="detail-foot">' +
                 contactHtml +
@@ -607,6 +634,12 @@
   }
 
   $('ranking').addEventListener('click', function (e) {
+    var rmBtn = e.target.closest('button[data-act="view-roadmap"]');
+    if (rmBtn) {
+      openRoadmapModal(rmBtn.dataset.id);
+      return;
+    }
+
     var viewBtn = e.target.closest('button[data-act="view-transcript"]');
     if (viewBtn) {
       openTranscriptModal(viewBtn.dataset.id);
@@ -673,6 +706,191 @@
   if ($('transcript-modal')) {
     $('transcript-modal').addEventListener('click', function (e) {
       if (e.target === this) closeTranscriptModal();
+    });
+  }
+
+  // Candidate Career Roadmap Modal
+  function openRoadmapModal(candId) {
+    var modal = $('roadmap-modal');
+    if (!modal) return;
+    var cand = state.out && state.out.list.find(function (c) { return c.id === candId; });
+    if (!cand || !cand.roadmapProfile) return;
+
+    var rm = cand.roadmapProfile;
+    $('rm-dialog-title').textContent = (rm.name || cand.name || 'Candidate') + ' — Career Roadmap Profile';
+    var content = $('rm-dialog-content');
+
+    var contactLinks = [];
+    if (rm.location) contactLinks.push('<span>📍 ' + esc(rm.location) + '</span>');
+    if (rm.email) contactLinks.push('<span>✉ ' + esc(rm.email) + '</span>');
+    if (rm.phone) contactLinks.push('<span>📞 ' + esc(rm.phone) + '</span>');
+    if (rm.links && rm.links.linkedin) contactLinks.push('<a href="' + esc(rm.links.linkedin) + '" target="_blank">LinkedIn</a>');
+    if (rm.links && rm.links.github) contactLinks.push('<a href="' + esc(rm.links.github) + '" target="_blank">GitHub</a>');
+
+    var timelineHtml = (rm.roadmap || []).map(function (item) {
+      var bullets = (item.highlights || []).map(function (h) { return '<li>' + esc(h) + '</li>'; }).join('');
+      var scale = item.scale ? '<span class="timeline-scale">⚡ ' + esc(item.scale) + '</span>' : '';
+      return '<div class="timeline-item">' +
+        '<div class="timeline-head">' +
+          '<div><span class="timeline-role">' + esc(item.role) + '</span> <span class="timeline-company">@ ' + esc(item.company) + '</span></div>' +
+          '<span class="timeline-duration">' + esc(item.duration) + '</span>' +
+        '</div>' +
+        scale +
+        '<ul class="timeline-bullets">' + bullets + '</ul>' +
+      '</div>';
+    }).join('');
+
+    var educationHtml = (rm.education || []).map(function (ed) {
+      return '<div class="education-card">' +
+        '<div class="education-school">🎓 ' + esc(ed.school) + '</div>' +
+        '<div class="education-degree">' + esc(ed.degree) + ' in ' + esc(ed.field) + '</div>' +
+        '<div class="education-year">' + esc(ed.year) + (ed.details ? ' &bull; ' + esc(ed.details) : '') + '</div>' +
+      '</div>';
+    }).join('');
+
+    var skillsHtml = '';
+    if (rm.skills) {
+      skillsHtml = Object.keys(rm.skills).map(function (cat) {
+        var tags = (rm.skills[cat] || []).map(function (t) { return '<span class="skill-pill">' + esc(t) + '</span>'; }).join('');
+        if (!tags) return '';
+        return '<div class="skill-row"><span class="skill-category">' + esc(cat) + '</span><div class="skill-tags">' + tags + '</div></div>';
+      }).join('');
+    }
+
+    content.innerHTML = '<div class="roadmap-profile" style="margin:0;padding:0;box-shadow:none;border:none">' +
+      '<div class="roadmap-header" style="margin-bottom:14px;padding-bottom:12px">' +
+        '<div>' +
+          '<h3 style="margin-bottom:4px">' + esc(rm.name || cand.name) + '</h3>' +
+          '<p class="roadmap-headline">' + esc(rm.headline || 'Software Engineer') + '</p>' +
+          '<div class="roadmap-contacts">' + contactLinks.join(' &bull; ') + '</div>' +
+        '</div>' +
+      '</div>' +
+      (rm.summary ? '<p style="color:var(--ink-2);font-size:0.92rem;margin-bottom:16px">' + esc(rm.summary) + '</p>' : '') +
+      '<h4 class="roadmap-section-title"><svg class="ic"><use href="#i-briefcase"/></svg> Career Roadmap & Experience</h4>' +
+      '<div class="timeline">' + timelineHtml + '</div>' +
+      '<h4 class="roadmap-section-title"><svg class="ic"><use href="#i-file"/></svg> Education & Schools Attended</h4>' +
+      '<div class="education-grid">' + educationHtml + '</div>' +
+      '<h4 class="roadmap-section-title"><svg class="ic"><use href="#i-check"/></svg> Technical Skills & Tools</h4>' +
+      '<div class="skills-taxonomy">' + skillsHtml + '</div>' +
+    '</div>';
+
+    modal.hidden = false;
+  }
+
+  function closeRoadmapModal() {
+    var modal = $('roadmap-modal');
+    if (modal) modal.hidden = true;
+  }
+
+  if ($('btn-close-rm-dialog')) $('btn-close-rm-dialog').addEventListener('click', closeRoadmapModal);
+  if ($('btn-close-rm-dialog-2')) $('btn-close-rm-dialog-2').addEventListener('click', closeRoadmapModal);
+  if ($('roadmap-modal')) {
+    $('roadmap-modal').addEventListener('click', function (e) {
+      if (e.target === this) closeRoadmapModal();
+    });
+  }
+
+  // Recruiter Job Postings (Devpost style)
+  var recruiterJobs = [];
+
+  async function loadRecruiterJobs() {
+    try {
+      var resp = await fetch('/api/data?action=list_jobs');
+      var data = await resp.json();
+      recruiterJobs = data.jobs || [];
+      renderRecruiterJobs();
+    } catch (e) {
+      console.warn('Recruiter jobs load notice:', e);
+    }
+  }
+
+  function renderRecruiterJobs() {
+    var container = $('recruiter-jobs-list');
+    if (!container) return;
+
+    if (!recruiterJobs.length) {
+      container.innerHTML = '<p class="hint">No published jobs yet. Use the form to post an opening.</p>';
+      return;
+    }
+
+    container.innerHTML = recruiterJobs.map(function (j) {
+      return '<div class="card" style="padding:14px;border:1.5px solid var(--line);border-radius:10px;background:#fff">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
+          '<div>' +
+            '<strong style="font-size:0.95rem;color:var(--ink)">' + esc(j.title) + '</strong>' +
+            '<p style="font-size:0.82rem;color:var(--muted)">' + esc(j.company) + ' &bull; ' + esc(j.location) + '</p>' +
+          '</div>' +
+          '<button type="button" class="btn-quiet btn-screen-role" data-job-id="' + esc(j.id) + '" style="padding:4px 10px;font-size:0.8rem">' +
+            'Screen role &rarr;' +
+          '</button>' +
+        '</div>' +
+        '<div style="margin-top:8px;font-size:0.82rem;color:var(--ink-2)">' +
+          '<strong>Must-haves:</strong> ' + (j.mustHaves || []).join(', ') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  if ($('recruiter-jobs-list')) {
+    $('recruiter-jobs-list').addEventListener('click', function (e) {
+      var btn = e.target.closest('.btn-screen-role');
+      if (!btn) return;
+      var jid = btn.dataset.jobId;
+      var found = recruiterJobs.find(function (x) { return x.id === jid; });
+      if (!found) return;
+
+      $('rec-role').value = found.title;
+      $('jd').value = found.description + '\n\nRequirements:\n' + (found.mustHaves || []).map(function (m) { return '- ' + m; }).join('\n') +
+        '\n\nNice to have:\n' + (found.niceToHaves || []).map(function (n) { return '- ' + n; }).join('\n');
+
+      state.reqs = [
+        ...(found.mustHaves || []).map(function (m) { return { id: uid('r'), text: m, weight: 'must' }; }),
+        ...(found.niceToHaves || []).map(function (n) { return { id: uid('r'), text: n, weight: 'nice' }; })
+      ];
+
+      renderReqs();
+      switchTab('screen');
+      say('Role "' + found.title + '" loaded with ' + state.reqs.length + ' requirements. Add candidates and press Screen.');
+    });
+  }
+
+  if ($('post-job-form')) {
+    $('post-job-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var title = $('new-job-title').value.trim();
+      var company = $('new-job-company').value.trim();
+      var location = $('new-job-location').value.trim();
+      var desc = $('new-job-desc').value.trim();
+      var must = $('new-job-must').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+      var nice = $('new-job-nice').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+
+      var status = $('post-job-status');
+      status.textContent = 'Publishing job ad…';
+
+      try {
+        var resp = await fetch('/api/data?action=post_job', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: title,
+            company: company,
+            location: location,
+            description: desc,
+            mustHaves: must,
+            niceToHaves: nice
+          })
+        });
+        var data = await resp.json();
+        if (data.ok) {
+          status.textContent = '✓ Job published live!';
+          $('post-job-form').reset();
+          loadRecruiterJobs();
+        } else {
+          status.textContent = '⚠ ' + (data.error || 'Failed to post');
+        }
+      } catch (err) {
+        status.textContent = '⚠ ' + err.message;
+      }
     });
   }
 
@@ -826,6 +1044,7 @@
       if (el) { el.textContent = 'Keyword mode'; el.className = 'mode'; }
     });
 
+  loadRecruiterJobs();
   initRecruiterChat();
   renderReqs();
   renderCands();

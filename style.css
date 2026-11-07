@@ -590,6 +590,122 @@ details.person[open] .chev { transform: rotate(180deg); }
 .summary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 18px; }
 
 /* ==========================================================================
+   DEVPOST-STYLE JOB BOARD & ROLE SELECTOR
+   ========================================================================== */
+.job-board-section { margin-bottom: 24px; }
+.job-board-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 16px 0; }
+.job-card {
+  padding: 18px 20px; border: 1.5px solid var(--line); border-radius: var(--radius);
+  background: #fff; cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; justify-content: space-between;
+}
+.job-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: var(--shadow); }
+.job-card.selected { border-color: var(--primary); background: #f6f9ff; box-shadow: 0 0 0 2px var(--primary); }
+.job-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.job-card-title { font-size: 1.05rem; font-weight: 800; color: var(--ink); line-height: 1.3; }
+.job-card-company { font-size: 0.85rem; font-weight: 700; color: var(--primary-d); margin-bottom: 6px; }
+.job-card-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.meta-tag { padding: 3px 8px; border-radius: 6px; background: var(--wash); font-size: 0.78rem; font-weight: 600; color: var(--ink-2); }
+.job-card-desc { font-size: 0.88rem; color: var(--muted); line-height: 1.45; margin-bottom: 14px; flex-grow: 1; }
+.job-card-reqs { list-style: none; padding: 0; margin: 0 0 14px; font-size: 0.82rem; color: var(--ink-2); }
+.job-card-reqs li { margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.job-card-reqs li::before { content: '•'; color: var(--primary); font-weight: 800; }
+.job-card-action { display: flex; justify-content: space-between; align-items: center; }
+
+/* Role Selector Pills */
+.role-pills-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
+.role-pill {
+  padding: 8px 16px; border-radius: 999px; border: 1.5px solid var(--line);
+  background: #fff; color: var(--ink-2); font-size: 0.88rem; font-weight: 700;
+  cursor: pointer; transition: all 0.15s ease;
+}
+.role-pill:hover { border-color: var(--primary); background: var(--wash); }
+.role-pill.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+/* ==========================================================================
+   MATCH DIAGNOSTICS & PERCENTILE RANKING
+   ========================================================================== */
+.diagnostics-card {
+  margin: 18px 0; padding: 20px 24px; border: 1px solid #c6d6ff; border-radius: var(--radius);
+  background: #f8faff; display: flex; flex-direction: column; gap: 14px;
+}
+.rank-banner {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px;
+  padding-bottom: 14px; border-bottom: 1px solid #e3eafc;
+}
+.rank-badge {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px;
+  border-radius: 999px; font-weight: 800; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.rank-badge.top-5 { background: #fdf3d8; color: #805b00; border: 1.5px solid #f2b544; }
+.rank-badge.top-10 { background: #e6f6ec; color: #0f6a37; border: 1.5px solid #1e9e4a; }
+.rank-badge.top-25 { background: #eef4ff; color: #1747cc; border: 1.5px solid #1f5bff; }
+.match-score-big { font-size: 1.8rem; font-weight: 900; letter-spacing: -0.03em; color: var(--ink); }
+
+.diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.diag-col { padding: 12px 16px; border-radius: 10px; background: #fff; border: 1px solid var(--line); }
+.diag-col h4 { font-size: 0.88rem; font-weight: 800; margin-bottom: 8px; }
+.diag-col ul { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; }
+.diag-col.passed h4 { color: var(--green-text); }
+.diag-col.missing h4 { color: var(--amber-text); }
+
+.recommendations-box {
+  padding: 14px 18px; border-radius: 10px; background: #fff7e6;
+  border-left: 4px solid var(--amber); font-size: 0.88rem; line-height: 1.5;
+}
+.recommendations-box strong { color: var(--amber-text); display: block; margin-bottom: 4px; font-weight: 800; }
+.recommendations-box ul { margin: 0; padding-left: 1.2rem; }
+
+/* ==========================================================================
+   CAREER ROADMAP PROFILE
+   ========================================================================== */
+.roadmap-profile {
+  margin: 18px 0; padding: 24px; border: 1.5px solid var(--line); border-radius: var(--radius);
+  background: #fff; box-shadow: var(--shadow);
+}
+.roadmap-header {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start;
+  gap: 16px; padding-bottom: 18px; border-bottom: 1px solid var(--line); margin-bottom: 20px;
+}
+.roadmap-header h3 { font-size: 1.35rem; font-weight: 900; color: var(--ink); margin-bottom: 4px; }
+.roadmap-headline { font-size: 0.98rem; font-weight: 600; color: var(--primary-d); margin-bottom: 8px; }
+.roadmap-contacts { display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.85rem; color: var(--muted); }
+.roadmap-contacts a { color: var(--primary); text-decoration: none; font-weight: 600; }
+
+.roadmap-section-title {
+  font-size: 1rem; font-weight: 800; color: var(--ink); text-transform: uppercase; letter-spacing: 0.05em;
+  margin: 22px 0 12px; display: flex; align-items: center; gap: 8px;
+}
+.timeline { position: relative; padding-left: 24px; margin: 14px 0 20px; }
+.timeline::before {
+  content: ''; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: var(--line-2);
+}
+.timeline-item { position: relative; margin-bottom: 20px; }
+.timeline-item:last-child { margin-bottom: 0; }
+.timeline-item::before {
+  content: ''; position: absolute; left: -24px; top: 5px; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--primary);
+}
+.timeline-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.timeline-role { font-size: 1rem; font-weight: 800; color: var(--ink); }
+.timeline-company { font-size: 0.9rem; font-weight: 700; color: var(--ink-2); }
+.timeline-duration { font-size: 0.8rem; font-weight: 700; color: var(--muted); background: var(--wash); padding: 2px 8px; border-radius: 6px; }
+.timeline-scale { display: inline-block; font-size: 0.8rem; font-weight: 700; color: var(--green-text); background: var(--green-soft); padding: 2px 8px; border-radius: 6px; margin: 3px 0 6px; }
+.timeline-bullets { margin: 6px 0 0; padding-left: 1.2rem; font-size: 0.88rem; color: var(--ink-2); }
+.timeline-bullets li { margin-bottom: 3px; }
+
+.education-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.education-card { padding: 12px 16px; border-radius: 10px; background: var(--wash); border: 1px solid var(--line); }
+.education-school { font-size: 0.95rem; font-weight: 800; color: var(--ink); margin-bottom: 2px; }
+.education-degree { font-size: 0.86rem; font-weight: 600; color: var(--ink-2); }
+.education-year { font-size: 0.78rem; font-weight: 700; color: var(--muted); margin-top: 4px; }
+
+.skills-taxonomy { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.skill-row { display: flex; align-items: flex-start; gap: 10px; font-size: 0.88rem; }
+.skill-category { font-weight: 800; color: var(--muted); width: 110px; flex-shrink: 0; font-size: 0.8rem; text-transform: uppercase; padding-top: 4px; }
+.skill-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.skill-pill { padding: 3px 10px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-d); font-size: 0.8rem; font-weight: 700; }
+
+/* ==========================================================================
    RESPONSIVE
    ========================================================================== */
 @media (max-width: 920px) {

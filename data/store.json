@@ -286,5 +286,98 @@
       ],
       "interviewConfidence": "medium"
     }
+  ],
+  "jobs": [
+    {
+      "id": "job_93076e7cec0d",
+      "title": "Senior AI Engineer",
+      "company": "SprintAI",
+      "location": "Remote",
+      "type": "Full-time",
+      "description": "Building LLM orchestration platforms",
+      "mustHaves": [
+        "Python and PyTorch",
+        "LangChain or LlamaIndex"
+      ],
+      "niceToHaves": [
+        "Groq LPU experience"
+      ],
+      "createdAt": "2026-11-07T22:58:31.359Z"
+    },
+    {
+      "id": "job_backend_lagos",
+      "title": "Founding Backend Engineer (Python / Go)",
+      "company": "Fintech Velocity (Seed)",
+      "location": "Lagos, Nigeria (Hybrid / Remote)",
+      "type": "Full-time",
+      "description": "We are building next-generation payment infrastructure for African merchants. Looking for a founding engineer to design high-throughput APIs and transaction ledgers.",
+      "mustHaves": [
+        "3+ years building production backend services",
+        "Python (FastAPI/Django) or Go in production",
+        "PostgreSQL database design and query optimization",
+        "Shipped an API used by external customers"
+      ],
+      "niceToHaves": [
+        "Prior early-stage startup experience",
+        "AWS (ECS, RDS) or GCP infrastructure",
+        "Redis caching and message queues"
+      ],
+      "createdAt": "2026-11-07T22:57:14.930Z"
+    },
+    {
+      "id": "job_fullstack_health",
+      "title": "Full-Stack Product Engineer (React / Node)",
+      "company": "Afrigood Health (Series A)",
+      "location": "Remote (Africa / GMT±2)",
+      "type": "Full-time",
+      "description": "Connecting patients to verified clinics and pharmacy deliveries across West Africa. You will own patient-facing dashboards and clinician workflows.",
+      "mustHaves": [
+        "3+ years building web applications with React or TypeScript",
+        "Node.js or Python backend APIs",
+        "Relational database modeling (PostgreSQL or MySQL)"
+      ],
+      "niceToHaves": [
+        "Tailwind CSS and responsive mobile-first UI design",
+        "Healthcare or compliance experience",
+        "GraphQL or tRPC knowledge"
+      ],
+      "createdAt": "2026-11-07T22:57:14.931Z"
+    },
+    {
+      "id": "job_mobile_logistics",
+      "title": "Mobile Engineer (Flutter / React Native)",
+      "company": "SprintLogistics (Seed)",
+      "location": "Lagos / Abuja, Nigeria",
+      "type": "Full-time",
+      "description": "Building driver, warehouse dispatch, and tracking applications optimized for low-bandwidth cellular environments.",
+      "mustHaves": [
+        "2+ years in mobile development with Flutter or React Native",
+        "Offline-first synchronization and SQLite or Realm caching",
+        "Shipped at least one app to Google Play Store or App Store"
+      ],
+      "niceToHaves": [
+        "Native Android (Kotlin) bridge knowledge",
+        "Background geolocation and live telemetry"
+      ],
+      "createdAt": "2026-11-07T22:57:14.931Z"
+    },
+    {
+      "id": "job_devops_infra",
+      "title": "DevOps & Cloud Infrastructure Lead",
+      "company": "Apex Cloud Systems",
+      "location": "Remote (Worldwide)",
+      "type": "Full-time",
+      "description": "Lead automated cloud provisioning, CI/CD pipelines, Kubernetes cluster health, and multi-region disaster recovery.",
+      "mustHaves": [
+        "3+ years managing production cloud infrastructure (AWS or GCP)",
+        "Docker containerization and Kubernetes orchestration",
+        "Infrastructure as Code (Terraform or Pulumi)"
+      ],
+      "niceToHaves": [
+        "SOC2 / ISO 27001 compliance hardening",
+        "Prometheus, Grafana, and OpenTelemetry monitoring"
+      ],
+      "createdAt": "2026-11-07T22:57:14.931Z"
+    }
   ]
 }

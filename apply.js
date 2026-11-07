@@ -11,6 +11,10 @@
 
   var currentImageBase64 = null;
   var currentAppId = null;
+  var currentRoadmap = null;
+  var currentPercentile = 'Top 10%';
+  var currentJobId = null;
+  var activeJobsList = [];
 
   // Step indicator: 1 upload, 2 confirm, 3 optional AI chat
   function setStep(n) {
@@ -215,6 +219,241 @@
     }
   });
 
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // Load and Render Devpost-style Job Board
+  async function loadJobs() {
+    try {
+      var resp = await fetch('/api/data?action=list_jobs');
+      var data = await resp.json();
+      activeJobsList = data.jobs || [];
+      renderJobBoard();
+    } catch (e) {
+      console.warn('Jobs load notice:', e);
+    }
+  }
+
+  function renderJobBoard() {
+    var container = $('job-board-grid');
+    if (!container || !activeJobsList.length) return;
+
+    container.innerHTML = activeJobsList.map(function (job, idx) {
+      var isSelected = (currentJobId === job.id) || (!currentJobId && idx === 0);
+      if (isSelected && !currentJobId) {
+        currentJobId = job.id;
+        if ($('f-role') && !$('f-role').value) $('f-role').value = job.title;
+      }
+
+      var reqsSnippet = (job.mustHaves || []).slice(0, 3).map(function (m) {
+        return '<li>' + esc(m) + '</li>';
+      }).join('');
+
+      return '<div class="job-card ' + (isSelected ? 'selected' : '') + '" data-job-id="' + esc(job.id) + '">' +
+        '<div class="job-card-head">' +
+          '<div>' +
+            '<p class="job-card-company">' + esc(job.company) + '</p>' +
+            '<h3 class="job-card-title">' + esc(job.title) + '</h3>' +
+          '</div>' +
+          (isSelected ? '<span class="tag green">Selected</span>' : '') +
+        '</div>' +
+        '<div class="job-card-meta">' +
+          '<span class="meta-tag">' + esc(job.location) + '</span>' +
+          '<span class="meta-tag">' + esc(job.type || 'Full-time') + '</span>' +
+        '</div>' +
+        '<p class="job-card-desc">' + esc(job.description.slice(0, 110)) + '…</p>' +
+        '<ul class="job-card-reqs">' + reqsSnippet + '</ul>' +
+        '<div class="job-card-action">' +
+          '<button type="button" class="btn-quiet select-job-btn" data-job-id="' + esc(job.id) + '">' +
+            (isSelected ? '✓ Applying to this role' : 'Select role') +
+          '</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  if ($('job-board-grid')) {
+    $('job-board-grid').addEventListener('click', function (e) {
+      var card = e.target.closest('.job-card');
+      if (!card) return;
+      var jid = card.dataset.jobId;
+      var found = activeJobsList.find(function (j) { return j.id === jid; });
+      if (!found) return;
+
+      currentJobId = found.id;
+      if ($('f-role')) $('f-role').value = found.title;
+      renderJobBoard();
+
+      var cvVal = $('f-cv') ? $('f-cv').value.trim() : '';
+      if (cvVal.length >= 20) {
+        runMatchDiagnostics(cvVal, currentJobId);
+      }
+    });
+  }
+
+  // Scrape full CV into Career Roadmap Profile
+  async function buildRoadmapAndDiagnostics(cvText) {
+    if (!cvText || cvText.length < 20) return;
+    showOcrStatus('AI is analyzing your CV and building your Career Roadmap Profile…');
+
+    try {
+      var resp = await fetch('/api/parse-cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cv: cvText })
+      });
+      var result = await resp.json();
+      hideOcrStatus();
+
+      if (result.ok && result.profile) {
+        currentRoadmap = result.profile;
+        renderRoadmapProfile(currentRoadmap);
+
+        if (currentRoadmap.name && !$('f-name').value) $('f-name').value = currentRoadmap.name;
+        if (currentRoadmap.phone && !$('f-phone').value) {
+          $('f-phone').value = currentRoadmap.phone;
+          phoneInput.dispatchEvent(new Event('input'));
+        }
+        if (currentRoadmap.email && !$('f-email').value) $('f-email').value = currentRoadmap.email;
+        if (currentRoadmap.location && !$('f-location').value) $('f-location').value = currentRoadmap.location;
+        if (currentRoadmap.links) {
+          if (currentRoadmap.links.linkedin && !$('f-linkedin').value) $('f-linkedin').value = currentRoadmap.links.linkedin;
+          if (currentRoadmap.links.github && !$('f-github').value) $('f-github').value = currentRoadmap.links.github;
+        }
+      }
+    } catch (e) {
+      hideOcrStatus();
+      console.warn('Roadmap build notice:', e.message);
+    }
+
+    runMatchDiagnostics(cvText, currentJobId);
+  }
+
+  function renderRoadmapProfile(rm) {
+    var rmBox = $('roadmap-display');
+    if (!rmBox) return;
+
+    if ($('rm-name')) $('rm-name').textContent = rm.name || 'Candidate Roadmap';
+    if ($('rm-headline')) $('rm-headline').textContent = rm.headline || 'Software Engineer';
+    if ($('rm-summary')) $('rm-summary').textContent = rm.summary || '';
+
+    var contactLinks = [];
+    if (rm.location) contactLinks.push('<span>📍 ' + esc(rm.location) + '</span>');
+    if (rm.email) contactLinks.push('<span>✉ ' + esc(rm.email) + '</span>');
+    if (rm.phone) contactLinks.push('<span>📞 ' + esc(rm.phone) + '</span>');
+    if (rm.links && rm.links.linkedin) contactLinks.push('<a href="' + esc(rm.links.linkedin) + '" target="_blank">LinkedIn</a>');
+    if (rm.links && rm.links.github) contactLinks.push('<a href="' + esc(rm.links.github) + '" target="_blank">GitHub</a>');
+    if ($('rm-contacts')) $('rm-contacts').innerHTML = contactLinks.join(' &bull; ');
+
+    var timelineBox = $('rm-timeline');
+    if (timelineBox && rm.roadmap && rm.roadmap.length) {
+      timelineBox.innerHTML = rm.roadmap.map(function (item) {
+        var bullets = (item.highlights || []).map(function (h) {
+          return '<li>' + esc(h) + '</li>';
+        }).join('');
+        var scaleBadge = item.scale ? '<span class="timeline-scale">⚡ ' + esc(item.scale) + '</span>' : '';
+
+        return '<div class="timeline-item">' +
+          '<div class="timeline-head">' +
+            '<div>' +
+              '<span class="timeline-role">' + esc(item.role) + '</span> ' +
+              '<span class="timeline-company">@ ' + esc(item.company) + '</span>' +
+            '</div>' +
+            '<span class="timeline-duration">' + esc(item.duration) + '</span>' +
+          '</div>' +
+          scaleBadge +
+          '<ul class="timeline-bullets">' + bullets + '</ul>' +
+        '</div>';
+      }).join('');
+    }
+
+    var eduBox = $('rm-education');
+    if (eduBox && rm.education && rm.education.length) {
+      eduBox.innerHTML = rm.education.map(function (ed) {
+        return '<div class="education-card">' +
+          '<div class="education-school">🎓 ' + esc(ed.school) + '</div>' +
+          '<div class="education-degree">' + esc(ed.degree) + ' in ' + esc(ed.field) + '</div>' +
+          '<div class="education-year">' + esc(ed.year) + (ed.details ? ' &bull; ' + esc(ed.details) : '') + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    var skillsBox = $('rm-skills');
+    if (skillsBox && rm.skills) {
+      var categories = Object.keys(rm.skills);
+      skillsBox.innerHTML = categories.map(function (cat) {
+        var tags = (rm.skills[cat] || []).map(function (t) {
+          return '<span class="skill-pill">' + esc(t) + '</span>';
+        }).join('');
+        if (!tags) return '';
+        return '<div class="skill-row">' +
+          '<span class="skill-category">' + esc(cat) + '</span>' +
+          '<div class="skill-tags">' + tags + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    rmBox.hidden = false;
+  }
+
+  async function runMatchDiagnostics(cvText, jobId) {
+    var diagBox = $('diagnostics-display');
+    if (!diagBox) return;
+
+    try {
+      var resp = await fetch('/api/data?action=match_role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cv: cvText, jobId: jobId })
+      });
+      var data = await resp.json();
+
+      if (data.ok) {
+        currentPercentile = data.percentile || 'Top 10%';
+
+        var badge = $('diag-rank-badge');
+        badge.textContent = '🏆 ' + currentPercentile + ' Applicant';
+        badge.className = 'rank-badge ' + (currentPercentile.includes('5%') ? 'top-5' : currentPercentile.includes('10%') ? 'top-10' : 'top-25');
+
+        $('diag-score').textContent = (data.score || 85) + '%';
+        $('diag-role-title').textContent = (data.job && data.job.title ? data.job.title : 'Selected Role') + ' Match Diagnostics';
+
+        var passedUl = $('diag-passed-list');
+        passedUl.innerHTML = (data.passedRequirements && data.passedRequirements.length)
+          ? data.passedRequirements.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('')
+          : '<li>Core software development background</li>';
+
+        var missingUl = $('diag-missing-list');
+        missingUl.innerHTML = (data.missingRequirements && data.missingRequirements.length)
+          ? data.missingRequirements.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('')
+          : '<li>No critical gaps detected!</li>';
+
+        var recUl = $('diag-rec-list');
+        recUl.innerHTML = (data.recommendations && data.recommendations.length)
+          ? data.recommendations.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('')
+          : '<li>Take the 5-minute AI interview below to verify unstated claims for recruiters.</li>';
+
+        diagBox.hidden = false;
+      }
+    } catch (e) {
+      console.warn('Diagnostics notice:', e);
+    }
+  }
+
+  if ($('btn-parse-roadmap')) {
+    $('btn-parse-roadmap').addEventListener('click', function () {
+      var text = $('f-cv').value.trim();
+      if (!text) {
+        uploadError('Please paste your CV text first.');
+        return;
+      }
+      buildRoadmapAndDiagnostics(text);
+    });
+  }
+
   function populateExtractedData(text, preFields) {
     $('f-cv').value = text;
     var detected = Engine.extractContacts(text);
@@ -244,6 +483,8 @@
 
     setStep(2);
     $('review-section').scrollIntoView({ behavior: 'smooth' });
+
+    buildRoadmapAndDiagnostics(text);
   }
 
   // Handle form submission
@@ -287,6 +528,9 @@
       links: { linkedin: linkedin, github: github },
       cv: cvText,
       consent: consent,
+      roadmapProfile: currentRoadmap,
+      rankingPercentile: currentPercentile,
+      targetJobId: currentJobId,
       createdAt: new Date().toISOString()
     };
 
@@ -356,4 +600,5 @@
     $('success-section').scrollIntoView({ behavior: 'smooth' });
   }
 
+  loadJobs();
 })();

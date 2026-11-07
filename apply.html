@@ -63,6 +63,17 @@
     </ol>
 
     <main>
+      <!-- Step 0: Job Openings Board (Devpost style) -->
+      <section class="card job-board-section" aria-labelledby="jobs-h">
+        <div class="card-head">
+          <div>
+            <h2 id="jobs-h">Select a role to apply for</h2>
+            <p class="hint">Choose an open role below to see how well your CV matches and rank in the top percentile, or upload for the general talent pool.</p>
+          </div>
+        </div>
+        <div id="job-board-grid" class="job-board-grid"></div>
+      </section>
+
       <!-- Step 1 -->
       <section id="upload-section" class="card upload-section" aria-labelledby="upload-h">
         <h2 id="upload-h" style="margin-bottom:4px">1. Upload your CV</h2>
@@ -138,8 +149,64 @@
           <h3 class="group-title">Your CV text</h3>
           <div class="form-field full-width">
             <label for="f-cv" class="field-label visually-hidden">Extracted CV text</label>
-            <p class="hint">This is what recruiters&rsquo; screening reads. Fix any mistakes.</p>
-            <textarea id="f-cv" rows="10" maxlength="12000" placeholder="Paste or check your CV text here&hellip;" required></textarea>
+            <p class="hint">This is what recruiters&rsquo; screening reads. Fix any mistakes, or let the AI build your Career Roadmap.</p>
+            <textarea id="f-cv" rows="8" maxlength="15000" placeholder="Paste or check your CV text here&hellip;" required></textarea>
+            <div class="row" style="margin-top:8px">
+              <button type="button" class="btn-quiet" id="btn-parse-roadmap"><svg class="ic" aria-hidden="true"><use href="#i-sparkle"/></svg> Scrape &amp; build Career Roadmap</button>
+            </div>
+          </div>
+
+          <!-- Career Roadmap Profile Display -->
+          <div id="roadmap-display" class="roadmap-profile" hidden>
+            <div class="roadmap-header">
+              <div>
+                <h3 id="rm-name">Career Roadmap Profile</h3>
+                <p id="rm-headline" class="roadmap-headline">Software Engineer</p>
+                <div id="rm-contacts" class="roadmap-contacts"></div>
+              </div>
+              <span class="tag green"><svg class="ic" aria-hidden="true"><use href="#i-sparkle"/></svg> AI Scraped &amp; Verified</span>
+            </div>
+
+            <p id="rm-summary" style="margin-bottom:16px;color:var(--ink-2);font-size:0.92rem;line-height:1.55"></p>
+
+            <h4 class="roadmap-section-title"><svg class="ic" aria-hidden="true"><use href="#i-briefcase"/></svg> Career Roadmap &amp; Experience</h4>
+            <div id="rm-timeline" class="timeline"></div>
+
+            <h4 class="roadmap-section-title"><svg class="ic" aria-hidden="true"><use href="#i-file"/></svg> Education &amp; Schools Attended</h4>
+            <div id="rm-education" class="education-grid"></div>
+
+            <h4 class="roadmap-section-title"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Technical Skills &amp; Tools</h4>
+            <div id="rm-skills" class="skills-taxonomy"></div>
+          </div>
+
+          <!-- Match Diagnostics & Ranking (Top 5%) -->
+          <div id="diagnostics-display" class="diagnostics-card" hidden>
+            <div class="rank-banner">
+              <div>
+                <span id="diag-rank-badge" class="rank-badge top-5">🏆 Top 5% Applicant</span>
+                <h3 id="diag-role-title" style="margin-top:6px;font-size:1.15rem;font-weight:800">Role Match Diagnostics</h3>
+              </div>
+              <div style="text-align:right">
+                <span class="match-score-big" id="diag-score">92%</span>
+                <small style="display:block;color:var(--muted);font-weight:700">Match score</small>
+              </div>
+            </div>
+
+            <div class="diag-grid">
+              <div class="diag-col passed">
+                <h4>✓ Requirements Met in CV</h4>
+                <ul id="diag-passed-list"></ul>
+              </div>
+              <div class="diag-col missing">
+                <h4>⚠ Missing / Unstated Skills</h4>
+                <ul id="diag-missing-list"></ul>
+              </div>
+            </div>
+
+            <div class="recommendations-box">
+              <strong>💡 AI Recommendations to Boost Your Pass Rate</strong>
+              <ul id="diag-rec-list"></ul>
+            </div>
           </div>
 
           <!-- Consent (unticked by default) -->

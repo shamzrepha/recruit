@@ -60,6 +60,9 @@
       <button type="button" class="tab-btn" id="tab-screen-btn" role="tab" aria-selected="false" aria-controls="section-screen" data-tab="screen">
         <span class="num" aria-hidden="true">2</span> Screen candidates
       </button>
+      <button type="button" class="tab-btn" id="tab-jobs-btn" role="tab" aria-selected="false" aria-controls="section-jobs" data-tab="jobs">
+        <span class="num" aria-hidden="true">3</span> Post an ad / Job board
+      </button>
     </div>
 
     <main>
@@ -233,6 +236,52 @@
           </div>
         </section>
       </section>
+
+      <!-- ============ STEP 3: Post an ad & Job Board ============ -->
+      <section id="section-jobs" class="tab-panel" role="tabpanel" aria-labelledby="tab-jobs-btn" hidden>
+        <div class="intake-grid">
+          <section class="card" aria-labelledby="post-job-h">
+            <h2 id="post-job-h"><svg class="ic" aria-hidden="true"><use href="#i-briefcase"/></svg> Post a new startup role</h2>
+            <p class="hint">Publish an open role to candidates. Candidates can view your ad, scan their CV, and see their live match ranking.</p>
+
+            <form id="post-job-form" style="margin-top:16px">
+              <label for="new-job-title" class="field-label">Role title</label>
+              <input type="text" id="new-job-title" placeholder="e.g. Founding Backend Engineer (Python / Go)" required>
+
+              <div class="form-grid" style="margin-top:12px">
+                <div>
+                  <label for="new-job-company" class="field-label">Company / Startup</label>
+                  <input type="text" id="new-job-company" placeholder="e.g. PayFast Lagos" required>
+                </div>
+                <div>
+                  <label for="new-job-location" class="field-label">Location / Work mode</label>
+                  <input type="text" id="new-job-location" placeholder="e.g. Lagos (Hybrid) or Remote" required>
+                </div>
+              </div>
+
+              <label for="new-job-desc" class="field-label" style="margin-top:12px">Role description &amp; mission</label>
+              <textarea id="new-job-desc" rows="3" placeholder="Briefly explain what the startup builds and what this engineer will own."></textarea>
+
+              <label for="new-job-must" class="field-label" style="margin-top:12px">Must-have requirements (one per line)</label>
+              <textarea id="new-job-must" rows="3" placeholder="3+ years in backend development&#10;Python or Go in production&#10;PostgreSQL database experience"></textarea>
+
+              <label for="new-job-nice" class="field-label" style="margin-top:12px">Nice-to-have requirements (one per line)</label>
+              <textarea id="new-job-nice" rows="2" placeholder="Early-stage startup experience&#10;AWS or GCP infrastructure"></textarea>
+
+              <div class="row" style="margin-top:16px">
+                <button type="submit" id="btn-submit-job" class="btn-main">Publish job ad <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
+                <p id="post-job-status" class="status" role="status"></p>
+              </div>
+            </form>
+          </section>
+
+          <aside class="card side-card" aria-labelledby="live-jobs-h">
+            <h2 id="live-jobs-h" style="font-size:1.15rem">Live published roles</h2>
+            <p class="hint">Active roles currently displayed to candidates on the application portal.</p>
+            <div id="recruiter-jobs-list" style="display:flex;flex-direction:column;gap:12px;margin-top:14px"></div>
+          </aside>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -250,6 +299,20 @@
       <div id="dialog-content" class="dialog-body"></div>
       <div class="dialog-footer">
         <button type="button" id="btn-close-dialog-2" class="btn-quiet">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Candidate Career Roadmap Modal -->
+  <div id="roadmap-modal" class="dialog-backdrop" hidden>
+    <div class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="rm-dialog-title" style="max-width:760px">
+      <div class="dialog-header">
+        <h3 id="rm-dialog-title">Candidate Career Roadmap</h3>
+        <button type="button" id="btn-close-rm-dialog" class="icon-btn" aria-label="Close dialog">&times;</button>
+      </div>
+      <div id="rm-dialog-content" class="dialog-body"></div>
+      <div class="dialog-footer">
+        <button type="button" id="btn-close-rm-dialog-2" class="btn-quiet">Close</button>
       </div>
     </div>
   </div>
