@@ -15,7 +15,7 @@
 
   var transcript = [];
   var questionIndex = 0;
-  var maxQuestions = 5;
+  var maxQuestions = 3;
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -39,9 +39,9 @@
     }
 
     $('interview-role-heading').textContent =
-      'Role: ' + (candidate.role || 'Senior Backend Engineer') + ' (' + maxQuestions + ' questions, ~5 minutes)';
+      'Role: ' + (candidate.role || 'Candidate') + ' (3 quick questions, ~2 minutes)';
 
-    appendMessage('ai', 'Hello ' + (candidate.name || 'there') + '! I am Scout Screener’s AI assistant. My goal is to ask a few questions to clarify your background for the recruiter. You can skip any question or stop whenever you like. Let’s begin!');
+    appendMessage('ai', 'Hello ' + (candidate.name || 'there') + '! I am Scout Screener’s AI assistant. I took a look at your CV and would love to ask 3 quick questions about your experience and what you are looking for next. You can skip any question or stop whenever you like. Let’s begin!');
 
     askNextQuestion();
   }
@@ -88,13 +88,23 @@
       showTyping(false);
       $('btn-send').disabled = false;
 
-      var question = data.question || 'Could you elaborate on a key project where you handled complex backend or database challenges?';
+      var hrFallbacks = [
+        'Looking at your CV, what is a key achievement or project you are most proud of?',
+        'When working with a team or under tight deadlines, how do you prioritize and communicate updates?',
+        'What kind of work environment, team culture, and role are you most excited to join next?'
+      ];
+      var question = data.question || hrFallbacks[questionIndex % hrFallbacks.length];
       appendMessage('ai', question);
       $('answer-input').focus();
     } catch (err) {
       showTyping(false);
       $('btn-send').disabled = false;
-      appendMessage('ai', 'Could you tell us about a production system or API you built and what your exact contribution was?');
+      var hrFallbacks = [
+        'Looking at your CV, what is a key achievement or project you are most proud of?',
+        'When working with a team or under tight deadlines, how do you prioritize and communicate updates?',
+        'What kind of work environment, team culture, and role are you most excited to join next?'
+      ];
+      appendMessage('ai', hrFallbacks[questionIndex % hrFallbacks.length]);
     }
   }
 

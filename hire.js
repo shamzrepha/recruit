@@ -120,10 +120,103 @@
       if (data && data.suggestedRole && $('rec-role')) {
         $('rec-role').value = data.suggestedRole;
       }
+      if (data && data.action === 'show_candidates') {
+        renderChatCandidateCards();
+      }
     } catch (err) {
       typingIndicator.hidden = true;
       $('rec-send-btn').disabled = false;
-      appendChatMessage('ai', "Understood. What are the key non-negotiable technical requirements for this role versus nice-to-haves?");
+      appendChatMessage('ai', "Understood. What are the key non-negotiable requirements for this role versus nice-to-haves?");
+    }
+  });
+
+  // Candidate Card Rendering within Chat
+  async function renderChatCandidateCards() {
+    var validCands = state.cands.filter(function (c) { return c.cv && c.cv.length >= 20; });
+    if (!validCands.length) {
+      await loadApplicantsAutomatically(true);
+      validCands = state.cands.filter(function (c) { return c.cv && c.cv.length >= 20; });
+    }
+
+    var div = document.createElement('div');
+    div.className = 'chat-bubble ai chat-candidate-deck';
+
+    if (!validCands.length) {
+      div.innerHTML = '<span class="speaker-label">AI Sourcing Partner — Candidate Pool</span>' +
+        '<p class="bubble-text">No candidate applications found in your pool yet.</p>' +
+        '<p style="font-size:0.85rem;margin-top:6px;color:var(--muted)">Candidates can submit their CVs at <a href="/apply" target="_blank" style="color:var(--primary);font-weight:700">/apply</a>. You can also load sample candidates in the Screening tab!</p>';
+      chatMessagesEl.appendChild(div);
+      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      return;
+    }
+
+    var cardsHtml = validCands.slice(0, 30).map(function (c, idx) {
+      var rm = c.roadmapProfile || {};
+      var headline = rm.headline || c.role || 'Applicant';
+      var percentile = c.rankingPercentile || (rm.suggestedRoles && rm.suggestedRoles[0] && rm.suggestedRoles[0].percentile) || 'Top 10%';
+      var school = (rm.education && rm.education[0] && rm.education[0].school) ? rm.education[0].school : '';
+
+      var skills = [];
+      if (rm.skills) {
+        Object.keys(rm.skills).forEach(function (cat) {
+          skills = skills.concat(rm.skills[cat] || []);
+        });
+      }
+      var skillTags = skills.slice(0, 4).map(function (s) {
+        return '<span class="chat-skill-pill">' + esc(s) + '</span>';
+      }).join('');
+
+      var pClass = 'pill-top-5';
+      if (/10%/.test(percentile)) pClass = 'pill-top-10';
+      else if (/25%/.test(percentile)) pClass = 'pill-top-25';
+
+      return '<div class="chat-cand-card">' +
+        '<div class="chat-cand-top">' +
+          '<div class="chat-cand-avatar">' + initials(c.name || 'Candidate') + '</div>' +
+          '<div class="chat-cand-info">' +
+            '<div class="chat-cand-name-row">' +
+              '<span class="chat-cand-name">' + esc(c.name || 'Applicant ' + (idx + 1)) + '</span>' +
+              '<span class="chat-ranking-badge ' + pClass + '">' + esc(percentile) + '</span>' +
+            '</div>' +
+            '<div class="chat-cand-headline">' + esc(headline) + '</div>' +
+            (school ? '<div class="chat-cand-school">🎓 ' + esc(school) + '</div>' : '') +
+          '</div>' +
+        '</div>' +
+        (skillTags ? '<div class="chat-cand-skills">' + skillTags + '</div>' : '') +
+        '<div class="chat-cand-actions">' +
+          '<button type="button" class="chat-btn-action view-rm" data-act="chat-view-roadmap" data-id="' + esc(c.id) + '">' +
+            '🔍 View Full CV & Roadmap' +
+          '</button>' +
+          '<button type="button" class="chat-btn-action screen-it" data-act="chat-screen-cand" data-id="' + esc(c.id) + '">' +
+            '⚡ Screen in Dashboard' +
+          '</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    div.innerHTML = '<span class="speaker-label">AI Sourcing Partner — Candidate Pool</span>' +
+      '<div class="chat-deck-header">' +
+        '<strong>Found ' + validCands.length + ' Candidate(s) in Pool</strong>' +
+        '<span style="font-size:0.8rem;color:var(--muted)">Review work badges, skills & full CVs</span>' +
+      '</div>' +
+      '<div class="chat-cands-grid">' + cardsHtml + '</div>';
+
+    chatMessagesEl.appendChild(div);
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
+
+  // Delegated click on chat messages for candidate actions
+  chatMessagesEl.addEventListener('click', function (e) {
+    var rmBtn = e.target.closest('button[data-act="chat-view-roadmap"]');
+    if (rmBtn) {
+      openRoadmapModal(rmBtn.dataset.id);
+      return;
+    }
+    var screenBtn = e.target.closest('button[data-act="chat-screen-cand"]');
+    if (screenBtn) {
+      switchTab('screen');
+      say('Switched to Screening Dashboard. Review requirements and click "Screen candidates".');
+      return;
     }
   });
 
@@ -311,8 +404,8 @@
     say('Sample role and made-up candidates loaded. Press Screen candidates.');
   });
 
-  $('load-applicants').addEventListener('click', async function () {
-    say('Loading applicants from portal…');
+  async function loadApplicantsAutomatically(silent) {
+    if (!silent) say('Loading applicants from portal…');
     try {
       var resp = await fetch('/api/data?action=list_candidates');
       var list = [];
@@ -322,9 +415,9 @@
       } else {
         list = JSON.parse(localStorage.getItem('scout_candidates') || '[]');
       }
-      if (!list.length) {
-        say('No candidate applications found yet. Candidates can apply at /apply.', true);
-        return;
+      if (!list || !list.length) {
+        if (!silent) say('No candidate applications found yet. Candidates can apply at /apply.', true);
+        return false;
       }
       state.cands = list.map(function (c) {
         return {
@@ -342,10 +435,16 @@
         };
       });
       renderCands();
-      say('Loaded ' + list.length + ' candidate(s) from portal.');
+      if (!silent) say('Loaded ' + list.length + ' candidate(s) from portal.');
+      return true;
     } catch (err) {
-      say('Could not load applicants: ' + err.message, true);
+      if (!silent) say('Could not load applicants: ' + err.message, true);
+      return false;
     }
+  }
+
+  $('load-applicants').addEventListener('click', function () {
+    loadApplicantsAutomatically(false);
   });
 
   /* ---------- Run Screening ---------- */
@@ -713,10 +812,21 @@
   function openRoadmapModal(candId) {
     var modal = $('roadmap-modal');
     if (!modal) return;
-    var cand = state.out && state.out.list.find(function (c) { return c.id === candId; });
-    if (!cand || !cand.roadmapProfile) return;
+    var cand = (state.out && state.out.list.find(function (c) { return c.id === candId; })) ||
+               state.cands.find(function (c) { return c.id === candId; });
+    if (!cand) return;
 
     var rm = cand.roadmapProfile;
+    if (!rm) {
+      rm = {
+        name: cand.name || 'Candidate',
+        headline: cand.role || 'Applicant Profile',
+        summary: cand.cv ? cand.cv.slice(0, 300) + '...' : 'Candidate profile submitted via portal.',
+        roadmap: [{ role: 'Applicant', company: 'Candidate Record', duration: 'Recent', highlights: ['Candidate submitted CV to portal'] }],
+        education: [],
+        skills: { General: ['Applicant'] }
+      };
+    }
     $('rm-dialog-title').textContent = (rm.name || cand.name || 'Candidate') + ' — Career Roadmap Profile';
     var content = $('rm-dialog-content');
 
@@ -772,6 +882,11 @@
       '<div class="education-grid">' + educationHtml + '</div>' +
       '<h4 class="roadmap-section-title"><svg class="ic"><use href="#i-check"/></svg> Technical Skills & Tools</h4>' +
       '<div class="skills-taxonomy">' + skillsHtml + '</div>' +
+      (cand.cv ?
+        '<details class="cand-raw-cv-details" style="margin-top:20px;border-top:1px solid var(--line);padding-top:14px">' +
+          '<summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--primary);margin-bottom:8px">📄 View Full Original CV Text</summary>' +
+          '<pre class="raw-cv-pre" style="background:var(--wash);padding:14px;border-radius:8px;font-size:0.82rem;white-space:pre-wrap;max-height:300px;overflow-y:auto;border:1px solid var(--line);color:var(--ink-2);line-height:1.5">' + esc(cand.cv) + '</pre>' +
+        '</details>' : '') +
     '</div>';
 
     modal.hidden = false;
@@ -1048,4 +1163,5 @@
   initRecruiterChat();
   renderReqs();
   renderCands();
+  loadApplicantsAutomatically(true);
 })();
