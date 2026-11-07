@@ -36,21 +36,93 @@ body {
   clip: rect(0 0 0 0); white-space: nowrap;
 }
 
-/* Header */
+/* Header & Branding */
 .top {
-  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
-  gap: 16px 32px; padding: 40px 0 20px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 16px 32px; padding: 28px 0 20px;
 }
-h1 {
-  margin: 0; font-size: clamp(2.2rem, 6vw, 3.6rem); line-height: 1.02;
-  font-weight: 800; letter-spacing: -0.03em;
+.brand-link { display: inline-flex; align-items: baseline; gap: 8px; text-decoration: none; color: var(--ink); }
+.brand-logo { color: var(--blue); font-size: 1.4rem; line-height: 1; }
+.brand-text { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.brand-sub { font-size: 0.85rem; color: var(--ink-soft); font-weight: 600; }
+.nav-actions { display: flex; align-items: center; gap: 14px; }
+
+/* Landing Page Hero */
+.hero-section { padding: 48px 0 36px; text-align: center; max-width: 960px; margin: 0 auto; }
+.hero-badge {
+  display: inline-block; padding: 4px 14px; background: var(--wash); border: 1px solid var(--line);
+  border-radius: 999px; font-size: 0.82rem; font-weight: 600; color: var(--blue-dark); margin-bottom: 18px;
 }
-.lede { margin: 12px 0 0; max-width: 34rem; color: var(--ink-soft); font-size: 1.1rem; }
-.mode {
-  margin: 0; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;
-  font-size: 0.875rem; color: var(--ink-soft); background: #fff;
+.hero-title {
+  margin: 0 auto 18px; font-size: clamp(2.4rem, 6.5vw, 4.2rem); font-weight: 800;
+  line-height: 1.05; letter-spacing: -0.035em; color: var(--ink);
 }
-.mode.ai { border-color: var(--green); color: var(--green-text); }
+.hero-lede {
+  margin: 0 auto 36px; max-width: 44rem; color: var(--ink-soft); font-size: 1.22rem; line-height: 1.5;
+}
+
+/* Two Gateways Grid */
+.gateways-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 24px; text-align: left; margin: 36px 0;
+}
+.gateway-card {
+  background: #fff; border: 2px solid var(--line); border-radius: 10px; padding: 32px 28px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.gateway-card:hover { transform: translateY(-3px); border-color: var(--blue); }
+.gateway-card.hire-card { border-top: 6px solid var(--blue); }
+.gateway-card.apply-card { border-top: 6px solid var(--green); }
+.gateway-icon { font-size: 2.2rem; margin-bottom: 12px; }
+.gateway-tag {
+  display: inline-block; font-size: 0.8rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--ink-soft); margin-bottom: 6px;
+}
+.gateway-card h2 { margin: 0 0 10px; font-size: 1.6rem; font-weight: 800; }
+.gateway-card p { color: var(--ink-soft); font-size: 0.96rem; line-height: 1.45; margin: 0 0 16px; }
+.gateway-features { list-style: none; margin: 0 0 24px; padding: 0; font-size: 0.88rem; color: var(--ink); }
+.gateway-features li { margin-bottom: 6px; }
+.gateway-btn { display: inline-block; text-align: center; text-decoration: none; width: 100%; }
+
+/* Match Bar Interactive Showcase on Landing */
+.how-it-works { margin: 28px 0; }
+.landing-legend { border-top: 0; padding-top: 0; }
+.demo-preview { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 20px; margin-top: 16px; }
+.demo-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.demo-candidate .bar { height: 20px; margin: 10px 0; }
+.demo-quote { margin: 8px 0 0; font-style: italic; color: var(--ink-soft); font-size: 0.9rem; }
+
+/* Trust Grid */
+.trust-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 40px 0 20px; }
+.trust-item { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 20px; }
+.trust-item h3 { margin: 0 0 8px; font-size: 1.05rem; }
+.trust-item p { margin: 0; color: var(--ink-soft); font-size: 0.9rem; line-height: 1.45; }
+
+/* Portal Tabs in /hire */
+.portal-tabs {
+  display: flex; gap: 8px; margin: 18px 0 24px; border-bottom: 2px solid var(--line);
+}
+.tab-btn {
+  padding: 12px 20px; background: none; border: 0; border-bottom: 3px solid transparent;
+  font: inherit; font-size: 1rem; font-weight: 700; color: var(--ink-soft); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; margin-bottom: -2px;
+}
+.tab-btn:hover { color: var(--ink); }
+.tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+.tab-panel[hidden] { display: none; }
+
+/* Recruiter AI Intake Chat */
+.chat-title { margin: 0 0 4px; font-size: 1.4rem; }
+.generate-cta-box {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  gap: 14px; margin-top: 18px; padding: 16px 20px; background: #eafaf0; border: 1px solid var(--green);
+  border-radius: 8px;
+}
+.generate-cta-box .cta-text { display: flex; flex-direction: column; }
+.generate-cta-box .cta-text strong { color: var(--green-text); font-size: 1rem; }
+.generate-cta-box .cta-text span { color: var(--ink-soft); font-size: 0.85rem; }
+.action-accent { background: var(--green); }
+.action-accent:hover { background: #167a39; }
 
 /* Legend */
 .legend {
@@ -382,6 +454,11 @@ details.recruiter-settings summary span { color: var(--ink-soft); font-size: 0.8
 
 /* Small screens */
 @media (max-width: 820px) {
+  .gateways-grid { grid-template-columns: 1fr; }
+  .trust-grid { grid-template-columns: 1fr; }
+  .portal-tabs { flex-direction: column; gap: 0; }
+  .tab-btn { width: 100%; border-bottom: 1px solid var(--line); }
+  .tab-btn.active { border-bottom: 2px solid var(--blue); }
   .setup { grid-template-columns: 1fr; }
   .settings-grid { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }

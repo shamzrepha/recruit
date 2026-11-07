@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>I am Looking to Hire - Scout Screener</title>
+  <meta name="description" content="AI recruiter chatbot interviews you to formulate role requirements, screens candidate CV evidence, and enables 1-click outreach.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <!-- Top Header -->
+    <header class="top">
+      <div class="top-text">
+        <p class="breadcrumbs"><a href="/" class="btn-quiet">&larr; Back to Home</a></p>
+        <h1>Recruiter & Founder Portal</h1>
+        <p class="lede">Have our AI analyze your startup and role requirements, screen candidate evidence, and reach out via WhatsApp.</p>
+      </div>
+      <div class="nav-actions">
+        <a href="/apply" class="nav-pill">&#127919; Switch to Candidate Portal</a>
+        <span id="mode" class="mode ai" role="status">AI Live</span>
+      </div>
+    </header>
+
+    <!-- Sub-navigation Tabs -->
+    <nav class="portal-tabs" aria-label="Recruiter Portal Sections">
+      <button type="button" class="tab-btn active" id="tab-intake-btn" aria-selected="true" data-tab="intake">
+        <span class="tab-icon">&#129302;</span> 1. AI Startup & Role Intake Chat
+      </button>
+      <button type="button" class="tab-btn" id="tab-screen-btn" aria-selected="false" data-tab="screen">
+        <span class="tab-icon">&#128202;</span> 2. Candidate Screening & Outreach
+      </button>
+    </nav>
+
+    <main>
+      <!-- ===================================================================
+           TAB 1: AI Role Intake Chatbot
+           =================================================================== -->
+      <section id="section-intake" class="tab-panel active" aria-labelledby="intake-heading">
+        <div class="card chat-card">
+          <div class="chat-header">
+            <div>
+              <h2 id="intake-heading" class="chat-title">AI Sourcing Partner</h2>
+              <p class="hint">Chat with our AI about what your startup does, your stage, and who you need to hire. We formulate your exact role requirements automatically.</p>
+            </div>
+            <button type="button" id="btn-quick-sample-chat" class="btn-quiet">Load Example Startup Brief</button>
+          </div>
+
+          <div id="recruiter-chat-messages" class="chat-messages" role="log" aria-live="polite">
+            <!-- Messages rendered dynamically -->
+          </div>
+
+          <div id="recruiter-typing" class="typing-indicator" hidden aria-hidden="true">
+            <span></span><span></span><span></span> AI assistant is formulating response…
+          </div>
+
+          <form id="recruiter-chat-form" class="chat-input-area">
+            <label for="rec-chat-input" class="visually-hidden">Tell the AI about your startup and hiring needs</label>
+            <textarea id="rec-chat-input" rows="3" maxlength="1500" placeholder="e.g. We are a seed-stage fintech startup in Lagos building payment APIs. We need a founding backend engineer with 3+ years in Python or Go..." required></textarea>
+            <div class="chat-actions">
+              <span class="subtext">Press Enter or Send</span>
+              <button type="submit" id="rec-send-btn" class="btn-main">Send Response</button>
+            </div>
+          </form>
+
+          <div class="generate-cta-box">
+            <div class="cta-text">
+              <strong>Ready to screen candidates?</strong>
+              <span>Convert our conversation into a structured role and screening criteria.</span>
+            </div>
+            <button type="button" id="btn-generate-role" class="btn-main action-accent">
+              &#10024; Generate Role &amp; Screening Requirements &rarr;
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           TAB 2: Candidate Screening & Outreach Dashboard
+           =================================================================== -->
+      <section id="section-screen" class="tab-panel" hidden aria-labelledby="screen-heading">
+        <!-- Outreach Template Settings -->
+        <details class="recruiter-settings" id="recruiter-box">
+          <summary>
+            <strong>Outreach &amp; Template Settings</strong>
+            <span>Configure WhatsApp, Call, and Email template</span>
+          </summary>
+          <div class="settings-grid">
+            <div>
+              <label for="rec-name" class="field-label">Your Name</label>
+              <input type="text" id="rec-name" value="Tolu Adebayo" placeholder="Recruiter Name">
+            </div>
+            <div>
+              <label for="rec-company" class="field-label">Company</label>
+              <input type="text" id="rec-company" value="Sourcing Sprints" placeholder="Company Name">
+            </div>
+            <div>
+              <label for="rec-role" class="field-label">Role Title</label>
+              <input type="text" id="rec-role" value="Founding Backend Engineer" placeholder="Role Title">
+            </div>
+            <div class="full-col">
+              <label for="rec-template" class="field-label">Outreach Message Template (supports {first name}, {recruiter name}, {company}, {role})</label>
+              <input type="text" id="rec-template" value="Hi {first name}, I'm {recruiter name} from {company}. I saw your CV for the {role} role and would like a quick chat. Are you free this week?">
+            </div>
+          </div>
+        </details>
+
+        <!-- Role & Candidates Setup -->
+        <div class="setup">
+          <section class="role" aria-labelledby="role-h">
+            <h2 id="role-h">Role Definition</h2>
+            <label for="jd" class="field-label">Job description</label>
+            <textarea id="jd" rows="8" placeholder="Paste job description or generate via the AI Intake Chatbot tab."></textarea>
+            <div class="row">
+              <button type="button" class="btn-quiet" id="extract">Pull out requirements</button>
+              <button type="button" class="btn-quiet" id="sample">Load sample role &amp; candidates</button>
+            </div>
+
+            <h3>Requirements</h3>
+            <ul id="reqs" class="reqs"></ul>
+            <div class="add-req">
+              <label for="newreq" class="visually-hidden">Add a requirement</label>
+              <input id="newreq" type="text" maxlength="140" placeholder="Add a requirement, then press Enter">
+              <button type="button" class="btn-quiet" id="addreq">Add</button>
+            </div>
+          </section>
+
+          <section class="people" aria-labelledby="people-h">
+            <h2 id="people-h">Candidates Pool</h2>
+            <p class="hint">Candidates who applied via Candidate Portal or sample candidates for instant demo.</p>
+            <div id="cands"></div>
+            <div class="row">
+              <button type="button" class="btn-quiet" id="addcand">Add a candidate</button>
+              <button type="button" class="btn-quiet" id="load-applicants">Load live applicants from portal</button>
+            </div>
+          </section>
+        </div>
+
+        <div class="run">
+          <button type="button" class="btn-main" id="run">Screen Candidates with AI</button>
+          <p id="status" class="status" role="status"></p>
+        </div>
+
+        <!-- Results Section -->
+        <section id="results" class="results" hidden aria-labelledby="results-h">
+          <div class="results-head">
+            <h2 id="results-h">Screening Results</h2>
+            <p id="tally" class="tally"></p>
+            <div class="export-group">
+              <label class="csv-toggle-label">
+                <input type="checkbox" id="csv-contacts"> Include contact details in CSV
+              </label>
+              <button type="button" class="btn-quiet" id="export">Download as CSV</button>
+            </div>
+          </div>
+          <p id="fallback" class="notice" hidden></p>
+          <ol id="ranking" class="ranking"></ol>
+
+          <div class="coverage">
+            <h3>Where the pool is thin</h3>
+            <p class="hint">How many candidates state each requirement, hardest to find first.</p>
+            <ul id="coverage" class="cov-list"></ul>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p>Scout Screener adheres strictly to the Nigeria Data Protection Act 2023 (NDPA). Contact details are only displayed when candidate consent is granted. Automatic 30-day lifecycle deletion policy.</p>
+    </footer>
+  </div>
+
+  <script src="engine.js"></script>
+  <script src="samples.js"></script>
+  <script src="hire.js"></script>
+</body>
+</html>

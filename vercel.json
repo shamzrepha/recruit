@@ -3,6 +3,7 @@
     "api/*.js": { "maxDuration": 60 }
   },
   "rewrites": [
+    { "source": "/hire", "destination": "/hire.html" },
     { "source": "/apply", "destination": "/apply.html" },
     { "source": "/interview", "destination": "/interview.html" }
   ]

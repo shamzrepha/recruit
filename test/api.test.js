@@ -3,6 +3,7 @@ const screenHandler = require('../api/screen.js');
 const ocrHandler = require('../api/ocr.js');
 const interviewHandler = require('../api/interview.js');
 const dataHandler = require('../api/data.js');
+const roleIntakeHandler = require('../api/role-intake.js');
 
 function fakeRes() {
   return {
@@ -286,6 +287,82 @@ function fakeRes() {
     query: { action: 'get_candidate', token: candidateToken }
   }, res);
   assert.strictEqual(res.code, 404, 'Deleted candidate is no longer accessible');
+
+
+  /* =========================================================================
+     5. RECRUITER AI INTAKE API TESTS
+     ========================================================================= */
+
+  // 5.1 Chat intake response
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    json: async () => ({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            reply: 'What are the core technical must-haves for your payment API engineers?',
+            suggestedRole: 'Founding Backend Engineer',
+            isReadyToGenerate: false
+          })
+        }
+      }]
+    })
+  });
+
+  res = fakeRes();
+  await roleIntakeHandler({
+    method: 'POST',
+    query: { action: 'chat' },
+    body: {
+      messages: [{ role: 'recruiter', text: 'We are a seed-stage fintech in Lagos building payments APIs.' }]
+    }
+  }, res);
+
+  assert.strictEqual(res.code, 200);
+  assert.ok(res.body.reply.includes('must-haves'), 'Returns interviewer response');
+  assert.strictEqual(res.body.suggestedRole, 'Founding Backend Engineer');
+
+  // 5.2 Synthesize role & requirements
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    json: async () => ({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            title: 'Founding Backend Engineer',
+            summary: 'Fintech seed startup building payments',
+            jd: 'Founding Backend Engineer role description',
+            requirements: [
+              { text: '3+ years Python or Go', weight: 'must' },
+              { text: 'PostgreSQL database', weight: 'must' },
+              { text: 'AWS experience', weight: 'nice' }
+            ]
+          })
+        }
+      }]
+    })
+  });
+
+  res = fakeRes();
+  await roleIntakeHandler({
+    method: 'POST',
+    query: { action: 'generate' },
+    body: {
+      messages: [
+        { role: 'ai', text: 'What is your startup?' },
+        { role: 'recruiter', text: 'Fintech payments startup' }
+      ]
+    }
+  }, res);
+
+  assert.strictEqual(res.code, 200);
+  assert.strictEqual(res.body.title, 'Founding Backend Engineer');
+  assert.strictEqual(res.body.requirements.length, 3);
+  assert.strictEqual(res.body.requirements[0].weight, 'must');
 
   console.log('All API & security tests passed successfully!');
 })().catch((e) => {
