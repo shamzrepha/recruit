@@ -30,6 +30,7 @@
   <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol>
   <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/></symbol>
 </svg>
 <header class="appbar">
   <div class="appbar-in">
@@ -87,7 +88,12 @@
               <textarea id="rec-chat-input" rows="3" maxlength="1500" placeholder="e.g. We are a seed-stage fintech in Lagos building payment APIs. We need a founding backend engineer with 3+ years in Python or Go." required></textarea>
               <div class="chat-actions">
                 <button type="button" id="btn-quick-sample-chat" class="btn-quiet">Use an example brief</button>
-                <button type="submit" id="rec-send-btn" class="btn-main">Send</button>
+                <div class="chat-btns-right">
+                  <button type="button" id="btn-rec-mic" class="btn-quiet btn-mic" title="Dictate with voice" aria-label="Dictate with voice">
+                    <svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg> <span class="mic-label">Voice</span>
+                  </button>
+                  <button type="submit" id="rec-send-btn" class="btn-main">Send</button>
+                </div>
               </div>
             </form>
           </div>
@@ -165,6 +171,13 @@
             <p id="tally" class="tally"></p>
           </div>
 
+          <div class="filter-pills" id="filter-pills" role="tablist" aria-label="Filter candidates by screening decision">
+            <button type="button" class="filter-pill active" data-filter="all" role="tab" aria-selected="true">All candidates <span class="count" id="count-all">0</span></button>
+            <button type="button" class="filter-pill" data-filter="strong" role="tab" aria-selected="false">Shortlist <span class="count" id="count-strong">0</span></button>
+            <button type="button" class="filter-pill" data-filter="look" role="tab" aria-selected="false">Ask first <span class="count" id="count-look">0</span></button>
+            <button type="button" class="filter-pill" data-filter="skip" role="tab" aria-selected="false">Passed <span class="count" id="count-skip">0</span></button>
+          </div>
+
           <p id="fallback" class="notice" hidden></p>
 
           <div class="results-tools">
@@ -226,6 +239,20 @@
   <footer class="foot">
     <p>Contact details are shown only when the candidate agreed. Candidate records expire after 30 days or sooner if the candidate asks. Designed around the principles of the Nigeria Data Protection Act 2023.</p>
   </footer>
+
+  <!-- Interview Transcript Dialog -->
+  <div id="transcript-modal" class="dialog-backdrop" hidden>
+    <div class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+      <div class="dialog-header">
+        <h3 id="dialog-title">Candidate Interview Transcript</h3>
+        <button type="button" id="btn-close-dialog" class="icon-btn" aria-label="Close dialog">&times;</button>
+      </div>
+      <div id="dialog-content" class="dialog-body"></div>
+      <div class="dialog-footer">
+        <button type="button" id="btn-close-dialog-2" class="btn-quiet">Close</button>
+      </div>
+    </div>
+  </div>
 
   <script src="engine.js"></script>
   <script src="samples.js"></script>

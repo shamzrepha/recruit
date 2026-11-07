@@ -25,6 +25,14 @@
       phone: '+2348031234567',
       email: 'adaeze.okafor@example.com',
       consent: true,
+      interviewSummary: 'Candidate confirmed 5 years total backend engineering, specifically architecting payments APIs on FastAPI with PostgreSQL. Handled 2M req/day peak throughput.',
+      interviewConfidence: 'high',
+      interviewTranscript: [
+        { role: 'ai', text: 'Could you elaborate on the scale of the payments API you shipped at your previous startup?' },
+        { role: 'candidate', text: 'We handled roughly 2M requests a day across 40 active fintech merchants, maintaining 99.95% uptime on AWS ECS.' },
+        { role: 'ai', text: 'How did you approach database migrations and indexing with PostgreSQL?' },
+        { role: 'candidate', text: 'We used Alembic for versioned schema migrations with zero-downtime deploy procedures and added targeted composite indices on merchant settlement tables.' }
+      ],
       cv: [
         'Adaeze Okafor',
         'Backend Engineer, 5 years of experience',

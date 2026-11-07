@@ -30,6 +30,7 @@
   <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol>
   <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/></symbol>
 </svg>
 <header class="appbar">
   <div class="appbar-in">
@@ -83,7 +84,12 @@
           <textarea id="answer-input" rows="3" maxlength="1500" placeholder="Type your answer. Be specific about what you built, the scale, and what you owned." required></textarea>
           <div class="chat-actions">
             <button type="button" id="btn-skip" class="btn-quiet">Skip this question</button>
-            <button type="submit" id="btn-send" class="btn-main">Send answer</button>
+            <div class="chat-btns-right">
+              <button type="button" id="btn-cand-mic" class="btn-quiet btn-mic" title="Dictate with voice" aria-label="Dictate with voice">
+                <svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg> <span class="mic-label">Voice</span>
+              </button>
+              <button type="submit" id="btn-send" class="btn-main">Send answer</button>
+            </div>
           </div>
         </form>
       </section>

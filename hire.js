@@ -15,7 +15,8 @@
     decisions: {},
     ai: true,
     revealedContacts: {},
-    chatMessages: []
+    chatMessages: [],
+    activeFilter: 'all'
   };
 
   function esc(s) {
@@ -292,7 +293,10 @@
         cv: c.cv,
         phone: c.phone || '',
         email: c.email || '',
-        consent: Boolean(c.consent)
+        consent: Boolean(c.consent),
+        interviewSummary: c.interviewSummary || null,
+        interviewConfidence: c.interviewConfidence || null,
+        interviewTranscript: c.interviewTranscript || null
       };
     });
     renderReqs();
@@ -324,7 +328,8 @@
           email: c.email || '',
           consent: Boolean(c.consent),
           interviewSummary: c.interviewSummary || null,
-          interviewConfidence: c.interviewConfidence || null
+          interviewConfidence: c.interviewConfidence || null,
+          interviewTranscript: c.interviewTranscript || null
         };
       });
       renderCands();
@@ -351,7 +356,8 @@
           email: c.email || '',
           consent: Boolean(c.consent),
           interviewSummary: c.interviewSummary || null,
-          interviewConfidence: c.interviewConfidence || null
+          interviewConfidence: c.interviewConfidence || null,
+          interviewTranscript: c.interviewTranscript || null
         };
       })
       .filter(function (c) { return c.cv.length >= 20; });
@@ -392,6 +398,7 @@
       res.consent = Boolean(orig.consent);
       res.interviewSummary = orig.interviewSummary || null;
       res.interviewConfidence = orig.interviewConfidence || null;
+      res.interviewTranscript = orig.interviewTranscript || null;
     });
 
     state.out = { list: list, reqs: reqs, usedAi: usedAi, failMsg: failMsg };
@@ -431,107 +438,141 @@
       fb.hidden = true;
     }
 
-    $('ranking').innerHTML = rows.map(function (row, i) {
-      var r = row.r, sc = row.sc, sug = row.sug;
-      var byId = {};
-      r.checks.forEach(function (k) { byId[k.reqId] = k; });
+    // Update filter counts
+    if ($('count-all')) $('count-all').textContent = rows.length;
+    if ($('count-strong')) $('count-strong').textContent = rows.filter(function (x) { return x.sug.code === 'strong'; }).length;
+    if ($('count-look')) $('count-look').textContent = rows.filter(function (x) { return x.sug.code === 'look'; }).length;
+    if ($('count-skip')) $('count-skip').textContent = rows.filter(function (x) { return x.sug.code === 'skip'; }).length;
 
-      var trs = reqs.map(function (req) {
-        var k = byId[req.id] || { status: 'not_stated', evidence: '', note: '' };
-        return '<tr>' +
-          '<td class="req-text">' + esc(req.text) + (req.weight === 'nice' ? ' <small>(nice to have)</small>' : '') + '</td>' +
-          '<td><span class="state ' + k.status + '"><span class="seg s-' + k.status + '"></span>' + STATE_LABEL[k.status] + '</span></td>' +
-          '<td>' + (k.evidence ? '<p class="quote">' + esc(k.evidence) + '</p>' : '') +
-            (k.note ? '<p class="note">' + esc(k.note) + '</p>' : '') + '</td></tr>';
-      }).join('');
+    var filteredRows = state.activeFilter === 'all'
+      ? rows
+      : rows.filter(function (x) { return x.sug.code === state.activeFilter; });
 
-      var qs = (r.questions || []).length
-        ? '<h4>Questions to ask</h4><ul class="questions">' + r.questions.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul>'
-        : '';
+    if (!filteredRows.length) {
+      $('ranking').innerHTML = '<li class="cand-empty" style="padding:28px;text-align:center;color:var(--muted)">No candidates match the selected &ldquo;' + esc(state.activeFilter) + '&rdquo; filter.</li>';
+    } else {
+      $('ranking').innerHTML = filteredRows.map(function (row, i) {
+        var r = row.r, sc = row.sc, sug = row.sug;
+        var byId = {};
+        r.checks.forEach(function (k) { byId[k.reqId] = k; });
 
-      var label = sc.now + ' percent match. ' + sc.counts.met + ' of ' + reqs.length + ' requirements stated.';
-      var up = sc.potential > sc.now ? '<small>up to ' + sc.potential + '% if verified</small>' : '';
+        var mustReqs = reqs.filter(function (q) { return q.weight === 'must'; });
+        var niceReqs = reqs.filter(function (q) { return q.weight === 'nice'; });
+        var mustMet = r.checks.filter(function (k) {
+          var mq = byId[k.reqId];
+          return mq && mq.weight === 'must' && k.status === 'met';
+        }).length;
+        var niceMet = r.checks.filter(function (k) {
+          var mq = byId[k.reqId];
+          return mq && mq.weight === 'nice' && k.status === 'met';
+        }).length;
 
-      // Contact Buttons (Phase 2)
-      var contactHtml = '';
-      var isRevealed = Boolean(state.revealedContacts[r.id]);
-      if (r.consent) {
-        var firstName = (r.name || '').split(/\s+/)[0] || 'there';
-        var recName = ($('rec-name') && $('rec-name').value) || 'Recruiter';
-        var recCompany = ($('rec-company') && $('rec-company').value) || 'Our Team';
-        var recRole = ($('rec-role') && $('rec-role').value) || 'Backend Engineer';
-        var tpl = ($('rec-template') && $('rec-template').value) ||
-          "Hi {first name}, I'm {recruiter name} from {company}. I saw your CV for the {role} role and would like a quick chat. Are you free this week?";
-
-        var vars = { firstName: firstName, recruiterName: recName, company: recCompany, role: recRole };
-        var waUrl = Engine.buildWhatsAppLink(r.phone, tpl, vars);
-        var telUrl = Engine.buildTelLink(r.phone);
-        var mailUrl = Engine.buildMailtoLink(r.email, 'Interview for ' + recRole + ' role at ' + recCompany,
-          Engine.renderTemplate(tpl, vars));
-
-        var linksHtml = isRevealed ? (
-          '<div class="contact-panel">' +
-            '<p class="contact-info"><strong>Phone:</strong> ' + esc(r.phone || 'Not provided') + ' &bull; <strong>Email:</strong> ' + esc(r.email || 'Not provided') + '</p>' +
-            '<div class="contact-links">' +
-              (waUrl ? '<a href="' + esc(waUrl) + '" target="_blank" rel="noopener noreferrer" class="contact-btn wa"><svg class="ic" aria-hidden="true"><use href="#i-message"/></svg> WhatsApp</a>' : '') +
-              (telUrl ? '<a href="' + esc(telUrl) + '" class="contact-btn tel"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg> Call</a>' : '') +
-              (mailUrl ? '<a href="' + esc(mailUrl) + '" class="contact-btn mail"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg> Email</a>' : '') +
-            '</div>' +
-          '</div>'
-        ) : '';
-
-        contactHtml = '<div class="contact-block">' +
-          '<button type="button" class="btn-quiet toggle-contact" data-act="toggle-contact" data-id="' + esc(r.id) + '">' +
-            (isRevealed ? 'Hide contact details' : 'Show contact details') +
-          '</button>' +
-          linksHtml +
+        var breakdownHtml = '<div class="breakdown-pill">' +
+          '<span><strong>Must:</strong> ' + mustMet + '/' + mustReqs.length + '</span>' +
+          '&bull; <span><strong>Nice:</strong> ' + niceMet + '/' + niceReqs.length + '</span>' +
         '</div>';
-      } else {
-        contactHtml = '<div class="contact-block"><span class="contact-withheld"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg> Contact details withheld by candidate</span></div>';
-      }
 
-      // Interview summary (Phase 3)
-      var interviewHtml = '';
-      if (r.interviewSummary) {
-        interviewHtml = '<div class="interview-summary-card">' +
-          '<h4>AI Verification Interview Summary</h4>' +
-          (r.interviewConfidence ? '<span class="tag ' + (r.interviewConfidence === 'high' ? 'strong' : 'look') + '">Confidence: ' + esc(r.interviewConfidence) + '</span>' : '') +
-          '<p class="interview-text">' + esc(r.interviewSummary) + '</p>' +
-        '</div>';
-      }
+        var trs = reqs.map(function (req) {
+          var k = byId[req.id] || { status: 'not_stated', evidence: '', note: '' };
+          return '<tr>' +
+            '<td class="req-text">' + esc(req.text) + (req.weight === 'nice' ? ' <small>(nice to have)</small>' : '') + '</td>' +
+            '<td><span class="state ' + k.status + '"><span class="seg s-' + k.status + '"></span>' + STATE_LABEL[k.status] + '</span></td>' +
+            '<td>' + (k.evidence ? '<p class="quote">' + esc(k.evidence) + '</p>' : '') +
+              (k.note ? '<p class="note">' + esc(k.note) + '</p>' : '') + '</td></tr>';
+        }).join('');
 
-      var prevEl = document.querySelector('details.person[data-id="' + r.id + '"]');
-      var wasOpen = Boolean(state.revealedContacts[r.id] || (prevEl && prevEl.open));
+        var qs = (r.questions || []).length
+          ? '<h4>Questions to ask</h4><ul class="questions">' + r.questions.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul>'
+          : '';
 
-      var decided = state.decisions[r.id] || '';
-      return '<li>' +
-        '<details class="person" data-id="' + esc(r.id) + '"' + (wasOpen ? ' open' : '') + '>' +
-          '<summary>' +
-            '<span class="rank">' + (i + 1) + '</span>' +
-            '<span class="who"><span class="avatar" aria-hidden="true">' + esc(initials(r.name)) + '</span>' +
-              '<span class="who-text"><strong>' + esc(r.name) + '</strong>' +
-                '<span class="who-meta"><span class="tag ' + sug.code + '">' + esc(sug.text) + '</span>' +
-                '<span class="decided" data-for="' + esc(r.id) + '">' + (decided ? esc(DECISION_LABEL[decided]) : '') + '</span></span></span></span>' +
-            barHtml(reqs, r.checks, label) +
-            '<span class="pct"><b>' + sc.now + '%</b>' + up + '</span>' +
-            '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>' +
-          '</summary>' +
-          '<div class="detail">' +
-            '<p class="suggest">' + esc(r.summary || '') + '</p>' +
-            '<table class="checks"><thead><tr><th>Requirement</th><th>Status</th><th>Evidence from the CV</th></tr></thead><tbody>' + trs + '</tbody></table>' +
-            qs +
-            interviewHtml +
-            '<div class="detail-foot">' +
-              contactHtml +
-              '<div class="pick" role="group" aria-label="Your decision for ' + esc(r.name) + '"><span class="label">Your decision</span>' +
-                ['shortlist', 'ask', 'pass'].map(function (v) {
-                  return '<button type="button" data-act="decide" data-id="' + esc(r.id) + '" data-val="' + v + '" aria-pressed="' + (decided === v) + '">' + DECISION_LABEL[v] + '</button>';
-                }).join('') +
+        var label = sc.now + ' percent match. ' + sc.counts.met + ' of ' + reqs.length + ' requirements stated.';
+        var up = sc.potential > sc.now ? '<small>up to ' + sc.potential + '% if verified</small>' : '';
+
+        // Contact Buttons (Phase 2)
+        var contactHtml = '';
+        var isRevealed = Boolean(state.revealedContacts[r.id]);
+        if (r.consent) {
+          var firstName = (r.name || '').split(/\s+/)[0] || 'there';
+          var recName = ($('rec-name') && $('rec-name').value) || 'Recruiter';
+          var recCompany = ($('rec-company') && $('rec-company').value) || 'Our Team';
+          var recRole = ($('rec-role') && $('rec-role').value) || 'Backend Engineer';
+          var tpl = ($('rec-template') && $('rec-template').value) ||
+            "Hi {first name}, I'm {recruiter name} from {company}. I saw your CV for the {role} role and would like a quick chat. Are you free this week?";
+
+          var vars = { firstName: firstName, recruiterName: recName, company: recCompany, role: recRole };
+          var waUrl = Engine.buildWhatsAppLink(r.phone, tpl, vars);
+          var telUrl = Engine.buildTelLink(r.phone);
+          var mailUrl = Engine.buildMailtoLink(r.email, 'Interview for ' + recRole + ' role at ' + recCompany,
+            Engine.renderTemplate(tpl, vars));
+
+          var linksHtml = isRevealed ? (
+            '<div class="contact-panel">' +
+              '<p class="contact-info"><strong>Phone:</strong> ' + esc(r.phone || 'Not provided') + ' &bull; <strong>Email:</strong> ' + esc(r.email || 'Not provided') + '</p>' +
+              '<div class="contact-links">' +
+                (waUrl ? '<a href="' + esc(waUrl) + '" target="_blank" rel="noopener noreferrer" class="contact-btn wa"><svg class="ic" aria-hidden="true"><use href="#i-message"/></svg> WhatsApp</a>' : '') +
+                (telUrl ? '<a href="' + esc(telUrl) + '" class="contact-btn tel"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg> Call</a>' : '') +
+                (mailUrl ? '<a href="' + esc(mailUrl) + '" class="contact-btn mail"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg> Email</a>' : '') +
+              '</div>' +
+            '</div>'
+          ) : '';
+
+          contactHtml = '<div class="contact-block">' +
+            '<button type="button" class="btn-quiet toggle-contact" data-act="toggle-contact" data-id="' + esc(r.id) + '">' +
+              (isRevealed ? 'Hide contact details' : 'Show contact details') +
+            '</button>' +
+            linksHtml +
+          '</div>';
+        } else {
+          contactHtml = '<div class="contact-block"><span class="contact-withheld"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg> Contact details withheld by candidate</span></div>';
+        }
+
+        // Interview summary & transcript (Phase 3 & 4)
+        var interviewHtml = '';
+        var hasTranscript = Boolean(r.interviewTranscript && r.interviewTranscript.length);
+        if (r.interviewSummary || hasTranscript) {
+          interviewHtml = '<div class="interview-summary-card">' +
+            '<h4>AI Verification Interview</h4>' +
+            (r.interviewConfidence ? '<span class="tag ' + (r.interviewConfidence === 'high' ? 'strong' : 'look') + '">Confidence: ' + esc(r.interviewConfidence) + '</span>' : '') +
+            (r.interviewSummary ? '<p class="interview-text">' + esc(r.interviewSummary) + '</p>' : '') +
+            (hasTranscript ? '<button type="button" class="btn-quiet btn-transcript" data-act="view-transcript" data-id="' + esc(r.id) + '" style="margin-top:8px"><svg class="ic" aria-hidden="true"><use href="#i-quote"/></svg> View interview transcript</button>' : '') +
+          '</div>';
+        }
+
+        var prevEl = document.querySelector('details.person[data-id="' + r.id + '"]');
+        var wasOpen = Boolean(state.revealedContacts[r.id] || (prevEl && prevEl.open));
+
+        var decided = state.decisions[r.id] || '';
+        return '<li>' +
+          '<details class="person" data-id="' + esc(r.id) + '"' + (wasOpen ? ' open' : '') + '>' +
+            '<summary>' +
+              '<span class="rank">' + (i + 1) + '</span>' +
+              '<span class="who"><span class="avatar" aria-hidden="true">' + esc(initials(r.name)) + '</span>' +
+                '<span class="who-text"><strong>' + esc(r.name) + '</strong>' +
+                  '<span class="who-meta"><span class="tag ' + sug.code + '">' + esc(sug.text) + '</span>' +
+                  '<span class="decided" data-for="' + esc(r.id) + '">' + (decided ? esc(DECISION_LABEL[decided]) : '') + '</span></span>' +
+                  breakdownHtml +
+                '</span></span>' +
+              barHtml(reqs, r.checks, label) +
+              '<span class="pct"><b>' + sc.now + '%</b>' + up + '</span>' +
+              '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>' +
+            '</summary>' +
+            '<div class="detail">' +
+              '<p class="suggest">' + esc(r.summary || '') + '</p>' +
+              '<table class="checks"><thead><tr><th>Requirement</th><th>Status</th><th>Evidence from the CV</th></tr></thead><tbody>' + trs + '</tbody></table>' +
+              qs +
+              interviewHtml +
+              '<div class="detail-foot">' +
+                contactHtml +
+                '<div class="pick" role="group" aria-label="Your decision for ' + esc(r.name) + '"><span class="label">Your decision</span>' +
+                  ['shortlist', 'ask', 'pass'].map(function (v) {
+                    return '<button type="button" data-act="decide" data-id="' + esc(r.id) + '" data-val="' + v + '" aria-pressed="' + (decided === v) + '">' + DECISION_LABEL[v] + '</button>';
+                  }).join('') +
+                '</div>' +
               '</div>' +
             '</div>' +
-          '</div>' +
-        '</details></li>';
-    }).join('');
+          '</details></li>';
+      }).join('');
+    }
 
     var cov = Engine.coverage(reqs, out.list).sort(function (a, b) {
       return a.counts.met - b.counts.met || b.counts.not_met - a.counts.not_met;
@@ -566,6 +607,12 @@
   }
 
   $('ranking').addEventListener('click', function (e) {
+    var viewBtn = e.target.closest('button[data-act="view-transcript"]');
+    if (viewBtn) {
+      openTranscriptModal(viewBtn.dataset.id);
+      return;
+    }
+
     var toggleBtn = e.target.closest('button[data-act="toggle-contact"]');
     if (toggleBtn) {
       var cid = toggleBtn.dataset.id;
@@ -588,6 +635,118 @@
     if (tag) tag.textContent = state.decisions[id] ? DECISION_LABEL[state.decisions[id]] : '';
     updateTally();
   });
+
+  function openTranscriptModal(candId) {
+    var modal = $('transcript-modal');
+    if (!modal) return;
+    var cand = state.out && state.out.list.find(function (c) { return c.id === candId; });
+    if (!cand) return;
+
+    $('dialog-title').textContent = 'Interview Transcript: ' + (cand.name || 'Candidate');
+    var content = $('dialog-content');
+
+    var transcript = cand.interviewTranscript || [];
+    if (!transcript.length && cand.interviewSummary) {
+      content.innerHTML = '<div class="interview-summary-card"><h4>Verified Summary</h4><p class="interview-text">' + esc(cand.interviewSummary) + '</p></div>';
+    } else if (!transcript.length) {
+      content.innerHTML = '<p class="hint" style="padding:16px;text-align:center">No transcript messages recorded for this candidate.</p>';
+    } else {
+      content.innerHTML = transcript.map(function (m) {
+        var isAi = m.role === 'ai';
+        return '<div class="transcript-bubble ' + (isAi ? 'ai' : 'candidate') + '">' +
+          '<strong>' + (isAi ? 'AI Interviewer' : esc(cand.name || 'Candidate')) + '</strong>' +
+          '<span>' + esc(m.text) + '</span>' +
+        '</div>';
+      }).join('');
+    }
+
+    modal.hidden = false;
+  }
+
+  function closeTranscriptModal() {
+    var modal = $('transcript-modal');
+    if (modal) modal.hidden = true;
+  }
+
+  if ($('btn-close-dialog')) $('btn-close-dialog').addEventListener('click', closeTranscriptModal);
+  if ($('btn-close-dialog-2')) $('btn-close-dialog-2').addEventListener('click', closeTranscriptModal);
+  if ($('transcript-modal')) {
+    $('transcript-modal').addEventListener('click', function (e) {
+      if (e.target === this) closeTranscriptModal();
+    });
+  }
+
+  // Filter Pills Handler
+  var filterContainer = $('filter-pills');
+  if (filterContainer) {
+    filterContainer.addEventListener('click', function (e) {
+      var pill = e.target.closest('.filter-pill');
+      if (!pill) return;
+      var f = pill.dataset.filter;
+      state.activeFilter = f;
+      var allPills = filterContainer.querySelectorAll('.filter-pill');
+      Array.prototype.forEach.call(allPills, function (p) {
+        var active = p === pill;
+        p.classList.toggle('active', active);
+        p.setAttribute('aria-selected', String(active));
+      });
+      if (state.out) renderResults(true);
+    });
+  }
+
+  // Web Speech API Voice Dictation for Recruiter Role Intake
+  var recRecognition = null;
+  var isRecRecording = false;
+  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if ($('btn-rec-mic')) {
+    if (!SpeechRec) {
+      $('btn-rec-mic').title = 'Voice dictation is supported in Chrome, Edge, and Safari';
+    } else {
+      $('btn-rec-mic').addEventListener('click', function () {
+        if (isRecRecording) {
+          if (recRecognition) recRecognition.stop();
+          return;
+        }
+
+        try {
+          recRecognition = new SpeechRec();
+          recRecognition.continuous = false;
+          recRecognition.interimResults = false;
+          recRecognition.lang = 'en-US';
+
+          recRecognition.onstart = function () {
+            isRecRecording = true;
+            $('btn-rec-mic').classList.add('recording');
+            var micSpan = $('btn-rec-mic').querySelector('.mic-label');
+            if (micSpan) micSpan.textContent = 'Listening…';
+          };
+
+          recRecognition.onresult = function (event) {
+            var speechResult = event.results[0][0].transcript;
+            var input = $('rec-chat-input');
+            input.value = input.value ? (input.value.trim() + ' ' + speechResult) : speechResult;
+            input.focus();
+          };
+
+          recRecognition.onerror = function (event) {
+            console.warn('Speech recognition error:', event.error);
+          };
+
+          recRecognition.onend = function () {
+            isRecRecording = false;
+            $('btn-rec-mic').classList.remove('recording');
+            var micSpan = $('btn-rec-mic').querySelector('.mic-label');
+            if (micSpan) micSpan.textContent = 'Voice';
+          };
+
+          recRecognition.start();
+        } catch (err) {
+          console.warn('Could not start speech recognition:', err);
+        }
+      });
+    }
+  }
 
   /* ---------- CSV Export ---------- */
   $('export').addEventListener('click', function () {

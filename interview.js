@@ -207,5 +207,59 @@
     window.location.href = '/apply';
   });
 
+  // Web Speech API Voice Dictation
+  var candRecognition = null;
+  var isCandRecording = false;
+  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if ($('btn-cand-mic')) {
+    if (!SpeechRec) {
+      $('btn-cand-mic').title = 'Voice dictation is supported in Chrome, Edge, and Safari';
+    } else {
+      $('btn-cand-mic').addEventListener('click', function () {
+        if (isCandRecording) {
+          if (candRecognition) candRecognition.stop();
+          return;
+        }
+
+        try {
+          candRecognition = new SpeechRec();
+          candRecognition.continuous = false;
+          candRecognition.interimResults = false;
+          candRecognition.lang = 'en-US';
+
+          candRecognition.onstart = function () {
+            isCandRecording = true;
+            $('btn-cand-mic').classList.add('recording');
+            var micSpan = $('btn-cand-mic').querySelector('.mic-label');
+            if (micSpan) micSpan.textContent = 'Listening…';
+          };
+
+          candRecognition.onresult = function (event) {
+            var speechResult = event.results[0][0].transcript;
+            var input = $('answer-input');
+            input.value = input.value ? (input.value.trim() + ' ' + speechResult) : speechResult;
+            input.focus();
+          };
+
+          candRecognition.onerror = function (event) {
+            console.warn('Speech recognition error:', event.error);
+          };
+
+          candRecognition.onend = function () {
+            isCandRecording = false;
+            $('btn-cand-mic').classList.remove('recording');
+            var micSpan = $('btn-cand-mic').querySelector('.mic-label');
+            if (micSpan) micSpan.textContent = 'Voice';
+          };
+
+          candRecognition.start();
+        } catch (err) {
+          console.warn('Could not start speech recognition:', err);
+        }
+      });
+    }
+  }
+
   loadCandidate();
 })();
