@@ -24,6 +24,12 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  function initials(name) {
+    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    return ((parts[0][0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  }
+
   function say(msg, isError) {
     var el = $('status');
     if (!el) return;
@@ -71,10 +77,10 @@
   function appendChatMessage(role, text) {
     var div = document.createElement('div');
     div.className = 'chat-bubble ' + (role === 'ai' ? 'ai' : 'candidate');
-    div.innerHTML = '<span class="speaker-label">' + (role === 'ai' ? 'AI Sourcing Partner' : 'Founder / Recruiter') + '</span>' +
+    div.innerHTML = '<span class="speaker-label">' + (role === 'ai' ? 'AI Sourcing Partner' : 'You') + '</span>' +
       '<p class="bubble-text">' + esc(text) + '</p>';
     chatMessagesEl.appendChild(div);
-    div.scrollIntoView({ behavior: 'smooth' });
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     state.chatMessages.push({ role: role, text: text });
   }
 
@@ -125,7 +131,7 @@
   $('btn-generate-role').addEventListener('click', async function () {
     var btn = $('btn-generate-role');
     btn.disabled = true;
-    btn.textContent = 'Synthesizing role requirements with AI…';
+    btn.textContent = 'Writing your requirements…';
 
     try {
       var resp = await fetch('/api/role-intake?action=generate', {
@@ -150,7 +156,7 @@
 
       renderReqs();
       switchTab('screen');
-      say('Role profile & ' + state.reqs.length + ' requirements generated from AI chat!');
+      say('Role and ' + state.reqs.length + ' requirements created from your chat. Check them, then add candidates.');
     } catch (err) {
       console.error(err);
       // Fallback to sample role
@@ -160,10 +166,10 @@
       });
       renderReqs();
       switchTab('screen');
-      say('Role requirements loaded from intake context.');
+      say('Could not reach the AI, so a sample role was loaded. Edit the requirements before screening.');
     } finally {
       btn.disabled = false;
-      btn.textContent = '✨ Generate Role & Screening Requirements →';
+      btn.textContent = 'Generate role and requirements →';
     }
   });
 
@@ -174,8 +180,9 @@
   function renderReqs() {
     var ul = $('reqs');
     if (!ul) return;
+    if ($('req-count')) $('req-count').textContent = state.reqs.length;
     if (!state.reqs.length) {
-      ul.innerHTML = '<li class="empty">No requirements yet. Extract them from the role or use the AI intake chat tab.</li>';
+      ul.innerHTML = '<li class="empty">No requirements yet. Paste a job description and press &ldquo;Pull out requirements&rdquo;, or brief the AI in step 1.</li>';
       return;
     }
     ul.innerHTML = state.reqs.map(function (r) {
@@ -233,10 +240,16 @@
   });
 
   function renderCands() {
+    if ($('cand-count')) $('cand-count').textContent = state.cands.length;
     $('cands').innerHTML = state.cands.map(function (c, i) {
+      var chip = (c.phone || c.email)
+        ? (c.consent ? '<span class="chip ok">Contact shared</span>' : '<span class="chip">Contact private</span>')
+        : '';
       return '<div class="cand" data-id="' + c.id + '">' +
         '<div class="cand-head">' +
+          '<span class="avatar" aria-hidden="true">' + esc(initials(c.name)) + '</span>' +
           '<input type="text" maxlength="80" value="' + esc(c.name) + '" placeholder="Name (optional)" aria-label="Candidate ' + (i + 1) + ' name">' +
+          chip +
           '<button type="button" class="icon-btn" data-act="delcand" aria-label="Remove candidate ' + (i + 1) + '">&times;</button>' +
         '</div>' +
         '<label class="visually-hidden" for="cv-' + c.id + '">CV text for candidate ' + (i + 1) + '</label>' +
@@ -284,7 +297,7 @@
     });
     renderReqs();
     renderCands();
-    say('Sample role & candidates loaded with verified Nigerian contact info. Press Screen candidates.');
+    say('Sample role and made-up candidates loaded. Press Screen candidates.');
   });
 
   $('load-applicants').addEventListener('click', async function () {
@@ -348,7 +361,7 @@
 
     var btn = $('run');
     btn.disabled = true;
-    say('Screening ' + cands.length + ' candidate(s) with Groq AI…');
+    say('Screening ' + cands.length + ' candidate(s)… this can take up to a minute.');
 
     var list = null, usedAi = false, failMsg = '';
     try {
@@ -384,7 +397,7 @@
     state.out = { list: list, reqs: reqs, usedAi: usedAi, failMsg: failMsg };
     state.decisions = {};
     btn.disabled = false;
-    say('');
+    say('Done. ' + list.length + ' candidate(s) ranked below.');
     renderResults();
   }
 
@@ -399,7 +412,7 @@
     return '<div class="bar" role="img" aria-label="' + esc(label) + '">' + segs + '</div>';
   }
 
-  function renderResults() {
+  function renderResults(quiet) {
     var out = state.out;
     var reqs = out.reqs;
 
@@ -413,7 +426,7 @@
     var fb = $('fallback');
     if (out.failMsg) {
       fb.hidden = false;
-      fb.textContent = 'AI screening notice: (' + out.failMsg + '). Showing keyword matched results.';
+      fb.textContent = 'The AI could not be used this time (' + String(out.failMsg).replace(/[.\s]+$/, '') + '), so these are keyword-match results. Quotes come straight from the CV, but treat the ranking as a rougher first pass.';
     } else {
       fb.hidden = true;
     }
@@ -460,21 +473,21 @@
           '<div class="contact-panel">' +
             '<p class="contact-info"><strong>Phone:</strong> ' + esc(r.phone || 'Not provided') + ' &bull; <strong>Email:</strong> ' + esc(r.email || 'Not provided') + '</p>' +
             '<div class="contact-links">' +
-              (waUrl ? '<a href="' + esc(waUrl) + '" target="_blank" rel="noopener noreferrer" class="contact-btn wa">&#128172; WhatsApp</a>' : '') +
-              (telUrl ? '<a href="' + esc(telUrl) + '" class="contact-btn tel">&#128222; Call</a>' : '') +
-              (mailUrl ? '<a href="' + esc(mailUrl) + '" class="contact-btn mail">&#9993; Email</a>' : '') +
+              (waUrl ? '<a href="' + esc(waUrl) + '" target="_blank" rel="noopener noreferrer" class="contact-btn wa"><svg class="ic" aria-hidden="true"><use href="#i-message"/></svg> WhatsApp</a>' : '') +
+              (telUrl ? '<a href="' + esc(telUrl) + '" class="contact-btn tel"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg> Call</a>' : '') +
+              (mailUrl ? '<a href="' + esc(mailUrl) + '" class="contact-btn mail"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg> Email</a>' : '') +
             '</div>' +
           '</div>'
         ) : '';
 
         contactHtml = '<div class="contact-block">' +
           '<button type="button" class="btn-quiet toggle-contact" data-act="toggle-contact" data-id="' + esc(r.id) + '">' +
-            (isRevealed ? 'Hide contact' : 'Show contact') +
+            (isRevealed ? 'Hide contact details' : 'Show contact details') +
           '</button>' +
           linksHtml +
         '</div>';
       } else {
-        contactHtml = '<div class="contact-block"><span class="contact-withheld">&#128274; Contact details withheld by candidate</span></div>';
+        contactHtml = '<div class="contact-block"><span class="contact-withheld"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg> Contact details withheld by candidate</span></div>';
       }
 
       // Interview summary (Phase 3)
@@ -490,24 +503,31 @@
       var prevEl = document.querySelector('details.person[data-id="' + r.id + '"]');
       var wasOpen = Boolean(state.revealedContacts[r.id] || (prevEl && prevEl.open));
 
+      var decided = state.decisions[r.id] || '';
       return '<li>' +
         '<details class="person" data-id="' + esc(r.id) + '"' + (wasOpen ? ' open' : '') + '>' +
           '<summary>' +
             '<span class="rank">' + (i + 1) + '</span>' +
-            '<span class="who"><strong>' + esc(r.name) + '</strong><span class="decided" data-for="' + esc(r.id) + '"></span></span>' +
+            '<span class="who"><span class="avatar" aria-hidden="true">' + esc(initials(r.name)) + '</span>' +
+              '<span class="who-text"><strong>' + esc(r.name) + '</strong>' +
+                '<span class="who-meta"><span class="tag ' + sug.code + '">' + esc(sug.text) + '</span>' +
+                '<span class="decided" data-for="' + esc(r.id) + '">' + (decided ? esc(DECISION_LABEL[decided]) : '') + '</span></span></span></span>' +
             barHtml(reqs, r.checks, label) +
             '<span class="pct"><b>' + sc.now + '%</b>' + up + '</span>' +
+            '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>' +
           '</summary>' +
           '<div class="detail">' +
-            '<p class="suggest"><span class="tag ' + sug.code + '">' + esc(sug.text) + '</span>' + esc(r.summary || '') + '</p>' +
+            '<p class="suggest">' + esc(r.summary || '') + '</p>' +
             '<table class="checks"><thead><tr><th>Requirement</th><th>Status</th><th>Evidence from the CV</th></tr></thead><tbody>' + trs + '</tbody></table>' +
             qs +
             interviewHtml +
-            contactHtml +
-            '<div class="pick" role="group" aria-label="Your decision for ' + esc(r.name) + '"><span class="label">Your decision</span>' +
-              ['shortlist', 'ask', 'pass'].map(function (v) {
-                return '<button type="button" data-act="decide" data-id="' + esc(r.id) + '" data-val="' + v + '" aria-pressed="false">' + DECISION_LABEL[v] + '</button>';
-              }).join('') +
+            '<div class="detail-foot">' +
+              contactHtml +
+              '<div class="pick" role="group" aria-label="Your decision for ' + esc(r.name) + '"><span class="label">Your decision</span>' +
+                ['shortlist', 'ask', 'pass'].map(function (v) {
+                  return '<button type="button" data-act="decide" data-id="' + esc(r.id) + '" data-val="' + v + '" aria-pressed="' + (decided === v) + '">' + DECISION_LABEL[v] + '</button>';
+                }).join('') +
+              '</div>' +
             '</div>' +
           '</div>' +
         '</details></li>';
@@ -530,6 +550,7 @@
     var res = $('results');
     res.hidden = false;
     updateTally();
+    if (quiet) return;
     var h = $('results-h');
     h.tabIndex = -1;
     res.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -549,7 +570,9 @@
     if (toggleBtn) {
       var cid = toggleBtn.dataset.id;
       state.revealedContacts[cid] = !state.revealedContacts[cid];
-      renderResults();
+      renderResults(true);
+      var again = document.querySelector('button[data-act="toggle-contact"][data-id="' + cid + '"]');
+      if (again) again.focus();
       return;
     }
 
@@ -619,6 +642,30 @@
     a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
   });
+
+  $('skip-to-screen').addEventListener('click', function () { switchTab('screen'); });
+
+  // Changing the outreach message or role title updates the links already shown.
+  ['rec-name', 'rec-company', 'rec-role', 'rec-template'].forEach(function (id) {
+    var el = $(id);
+    if (el) el.addEventListener('input', function () { if (state.out) renderResults(true); });
+  });
+
+  // Show whether the AI is really configured on the server.
+  fetch('/api/screen', { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : { ai: false }; })
+    .then(function (d) {
+      var el = $('mode');
+      state.ai = Boolean(d && d.ai);
+      if (!el) return;
+      el.textContent = state.ai ? 'AI screening on' : 'Keyword mode';
+      el.className = 'mode' + (state.ai ? ' ai' : '');
+    })
+    .catch(function () {
+      var el = $('mode');
+      state.ai = false;
+      if (el) { el.textContent = 'Keyword mode'; el.className = 'mode'; }
+    });
 
   initRecruiterChat();
   renderReqs();

@@ -12,6 +12,28 @@
   var currentImageBase64 = null;
   var currentAppId = null;
 
+  // Step indicator: 1 upload, 2 confirm, 3 optional AI chat
+  function setStep(n) {
+    var items = document.querySelectorAll('#stepper li');
+    Array.prototype.forEach.call(items, function (li, i) {
+      li.classList.toggle('done', i + 1 < n);
+      li.classList.toggle('current', i + 1 === n);
+      if (i + 1 === n) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+    });
+  }
+
+  function uploadError(msg) {
+    var el = $('upload-msg');
+    if (el) el.textContent = msg || '';
+  }
+
+  function submitError(msg, focusEl) {
+    var el = $('submit-status');
+    el.textContent = msg;
+    el.className = 'status error';
+    if (focusEl) focusEl.focus();
+  }
+
   // Phone validation on input
   var phoneInput = $('f-phone');
   var phoneFeedback = $('phone-feedback');
@@ -41,6 +63,12 @@
   browseBtn.addEventListener('click', function () { fileInput.click(); });
   dropzone.addEventListener('click', function (e) {
     if (e.target !== browseBtn) fileInput.click();
+  });
+  dropzone.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target === dropzone) {
+      e.preventDefault();
+      fileInput.click();
+    }
   });
 
   dropzone.addEventListener('dragover', function (e) {
@@ -79,7 +107,12 @@
   async function handleFile(file) {
     if (!file) return;
     currentImageBase64 = null;
+    uploadError('');
     $('vision-fallback-box').hidden = true;
+    if (file.size > 5 * 1024 * 1024) {
+      uploadError('That file is over 5 MB. Try a smaller photo or a screenshot.');
+      return;
+    }
 
     var type = file.type;
     var name = file.name || '';
@@ -89,7 +122,7 @@
     } else if (type.startsWith('image/') || /\.(png|jpg|jpeg|webp)$/i.test(name)) {
       await extractFromImage(file);
     } else {
-      alert('Please upload a PDF document or an image file (PNG, JPG, WEBP).');
+      uploadError('Please choose a PDF or an image (PNG, JPG or WEBP).');
     }
   }
 
@@ -111,14 +144,14 @@
       var fullText = pagesText.join('\n\n').trim();
       hideOcrStatus();
       if (!fullText) {
-        alert('Could not find a text layer in this PDF. If it is a scanned document, please take a photo or screenshot instead.');
+        uploadError('This PDF has no readable text (it may be a scan). Take a photo or screenshot of it instead.');
         return;
       }
       populateExtractedData(fullText);
     } catch (err) {
       hideOcrStatus();
       console.error(err);
-      alert('Failed to read PDF: ' + (err.message || 'Unknown error'));
+      uploadError('Could not read that PDF: ' + (err.message || 'unknown error') + '. You can also paste your CV text below.');
     }
   }
 
@@ -148,7 +181,7 @@
     } catch (err) {
       hideOcrStatus();
       console.error(err);
-      alert('Browser OCR encountered an error. You can paste your text below or use Groq Vision.');
+      uploadError('Reading the image on this device failed. You can paste your CV text below or use Groq Vision.');
       $('vision-fallback-box').hidden = false;
     }
   }
@@ -156,7 +189,7 @@
   // Vision fallback (explicit consent required)
   $('btn-use-vision').addEventListener('click', async function () {
     if (!currentImageBase64) {
-      alert('Please upload an image first.');
+      uploadError('Please upload an image first.');
       return;
     }
     var agree = confirm('To use AI Vision, your CV image will be sent securely to Groq Vision serverless API. Do you want to proceed?');
@@ -178,7 +211,7 @@
       }
     } catch (err) {
       hideOcrStatus();
-      alert('Groq Vision error: ' + err.message);
+      uploadError('Groq Vision could not read it: ' + err.message);
     }
   });
 
@@ -209,6 +242,7 @@
     if (detected.links.github && !$('f-github').value) $('f-github').value = detected.links.github;
     if (detected.links.portfolio && !$('f-github').value) $('f-github').value = detected.links.portfolio;
 
+    setStep(2);
     $('review-section').scrollIntoView({ behavior: 'smooth' });
   }
 
@@ -226,15 +260,16 @@
     var role = $('f-role').value.trim();
     var consent = $('f-consent').checked;
 
-    if (!name) { alert('Please enter your full name.'); return; }
-    if (!cvText || cvText.length < 30) { alert('Please enter or extract your CV text (at least 30 characters).'); return; }
+    $('submit-status').className = 'status';
+    $('submit-status').textContent = '';
+    if (!name) { submitError('Please enter your full name.', $('f-name')); return; }
+    if (!cvText || cvText.length < 30) { submitError('Please add your CV text (at least 30 characters).', $('f-cv')); return; }
 
     var normPhone = { valid: false, e164: '' };
     if (phone) {
       normPhone = Engine.normalizePhone(phone);
       if (!normPhone.valid) {
-        alert('Please correct the phone number error: ' + normPhone.error);
-        $('f-phone').focus();
+        submitError('Check your phone number: ' + normPhone.error, $('f-phone'));
         return;
       }
     }
@@ -288,6 +323,17 @@
 
     var candidateUrl = window.location.origin + '/interview?token=' + appId;
     $('cand-link').textContent = candidateUrl;
+    setStep(3);
+
+    $('copy-link-btn').onclick = function () {
+      var btn = $('copy-link-btn');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(candidateUrl).then(function () {
+          btn.lastChild.textContent = ' Copied';
+          setTimeout(function () { btn.lastChild.textContent = ' Copy link'; }, 1800);
+        }).catch(function () {});
+      }
+    };
 
     $('start-interview-btn').onclick = function () {
       window.location.href = '/interview?token=' + appId;

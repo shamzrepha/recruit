@@ -53,7 +53,7 @@
     msgDiv.innerHTML = '<span class="speaker-label">' + (role === 'ai' ? 'AI Interviewer' : 'You') + '</span>' +
       '<p class="bubble-text">' + esc(text) + '</p>';
     container.appendChild(msgDiv);
-    msgDiv.scrollIntoView({ behavior: 'smooth' });
+    container.scrollTop = container.scrollHeight;
     transcript.push({ role: role, text: text });
   }
 
@@ -68,6 +68,7 @@
     }
 
     $('progress-indicator').textContent = 'Question ' + (questionIndex + 1) + ' of ' + maxQuestions;
+    if ($('progress-fill')) $('progress-fill').style.width = ((questionIndex + 1) / maxQuestions * 100) + '%';
     showTyping(true);
     $('btn-send').disabled = true;
 
@@ -132,6 +133,7 @@
 
   async function finishInterview() {
     if ($('chat-card')) $('chat-card').hidden = true;
+    if ($('transparency-notice')) $('transparency-notice').hidden = true;
     if ($('summary-section')) $('summary-section').hidden = false;
     $('summary-body').textContent = 'Generating recruiter verification summary…';
 

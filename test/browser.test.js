@@ -53,7 +53,7 @@ if (!fs.existsSync(SCREENSHOT_DIR)) {
     recruiterPage.on('dialog', async d => { await d.accept(); });
 
     await recruiterPage.goto('http://localhost:3344/hire', { waitUntil: 'networkidle' });
-    assert.ok((await recruiterPage.title()).includes('I am Looking to Hire'), 'Page title is correct');
+    assert.ok((await recruiterPage.title()).includes('Recruiter workspace'), 'Page title is correct');
 
     // Tab 1: AI Role Intake Chatbot
     await recruiterPage.waitForSelector('#recruiter-chat-messages .chat-bubble.ai');
