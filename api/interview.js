@@ -74,7 +74,7 @@ function safeParse(s) {
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const apiKey = process.env.GROQ_API_KEY;
-  const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+  const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Use POST.' });

@@ -149,7 +149,7 @@ module.exports = async (req, res) => {
     cv: clip(c.cv, MAX_CV_CHARS)
   }));
 
-  const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+  const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
   try {
     const results = await inBatches(cleanCands, BATCH_SIZE, (c) => screenOne(apiKey, model, cleanReqs, c));
     return res.status(200).json({ results });
