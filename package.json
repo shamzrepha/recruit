@@ -1,0 +1,11 @@
+{
+  "name": "scout-screener",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Rank candidates against a role, with evidence from each CV. A human makes the decision.",
+  "scripts": {
+    "test": "node test/engine.test.js",
+    "dev": "npx vercel dev"
+  },
+  "engines": { "node": ">=18" }
+}

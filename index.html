@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scout Screener</title>
+  <meta name="description" content="Rank candidates against a role and see the evidence from each CV. You make the final call.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="top-text">
+        <h1>Scout Screener</h1>
+        <p class="lede">Rank candidates against a role and see the evidence in each CV. The AI suggests. You decide.</p>
+      </div>
+      <p id="mode" class="mode" role="status">Checking mode…</p>
+    </header>
+
+    <ul class="legend" aria-label="How to read a match bar">
+      <li><span class="seg s-met"></span> Stated in the CV</li>
+      <li><span class="seg s-not_stated"></span> Not stated, so verify</li>
+      <li><span class="seg s-not_met"></span> The CV says otherwise</li>
+    </ul>
+
+    <main>
+      <div class="setup">
+        <section class="role" aria-labelledby="role-h">
+          <h2 id="role-h">The role</h2>
+          <label for="jd" class="field-label">Job description</label>
+          <textarea id="jd" rows="8" placeholder="Paste the job description. Use bullet points for requirements."></textarea>
+          <div class="row">
+            <button type="button" class="btn-quiet" id="extract">Pull out requirements</button>
+            <button type="button" class="btn-quiet" id="sample">Load a sample role and candidates</button>
+          </div>
+
+          <h3>Requirements</h3>
+          <ul id="reqs" class="reqs"></ul>
+          <div class="add-req">
+            <label for="newreq" class="visually-hidden">Add a requirement</label>
+            <input id="newreq" type="text" maxlength="140" placeholder="Add a requirement, then press Enter">
+            <button type="button" class="btn-quiet" id="addreq">Add</button>
+          </div>
+        </section>
+
+        <section class="people" aria-labelledby="people-h">
+          <h2 id="people-h">Candidates</h2>
+          <p class="hint">Paste each CV as plain text. Ranking is based on the requirements, not on names or personal details.</p>
+          <div id="cands"></div>
+          <div class="row">
+            <button type="button" class="btn-quiet" id="addcand">Add a candidate</button>
+          </div>
+        </section>
+      </div>
+
+      <div class="run">
+        <button type="button" class="btn-main" id="run">Screen candidates</button>
+        <p id="status" class="status" role="status"></p>
+      </div>
+
+      <section id="results" class="results" hidden aria-labelledby="results-h">
+        <div class="results-head">
+          <h2 id="results-h">Results</h2>
+          <p id="tally" class="tally"></p>
+          <button type="button" class="btn-quiet" id="export">Download as CSV</button>
+        </div>
+        <p id="fallback" class="notice" hidden></p>
+        <ol id="ranking" class="ranking"></ol>
+
+        <div class="coverage">
+          <h3>Where the pool is thin</h3>
+          <p class="hint">How many candidates state each requirement, hardest to find first.</p>
+          <ul id="coverage" class="cov-list"></ul>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p>Nothing is saved. CVs stay in this page and are cleared when you close it. In AI mode, CV text is sent to Groq to produce the results.</p>
+    </footer>
+  </div>
+
+  <script src="engine.js"></script>
+  <script src="samples.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
