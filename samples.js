@@ -22,6 +22,9 @@
   var CANDIDATES = [
     {
       name: 'Adaeze Okafor',
+      phone: '+2348031234567',
+      email: 'adaeze.okafor@example.com',
+      consent: true,
       cv: [
         'Adaeze Okafor',
         'Backend Engineer, 5 years of experience',
@@ -33,6 +36,9 @@
     },
     {
       name: 'Tunde Bakare',
+      phone: '+2348023456789',
+      email: 'tunde.bakare@example.com',
+      consent: true,
       cv: [
         'Tunde Bakare',
         'Software engineer, 4 years of experience building backend systems.',
@@ -44,6 +50,9 @@
     },
     {
       name: 'Chiamaka Eze',
+      phone: '+2348098765432',
+      email: 'chiamaka.eze@example.com',
+      consent: false,
       cv: [
         'Chiamaka Eze',
         'Recent graduate, Computer Science.',
@@ -54,6 +63,9 @@
     },
     {
       name: 'Ibrahim Sule',
+      phone: '+2349091122334',
+      email: 'ibrahim.sule@example.com',
+      consent: true,
       cv: [
         'Ibrahim Sule',
         'Senior engineer with 7 years of experience in backend services.',

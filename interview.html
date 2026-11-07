@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Verification Interview - Scout Screener</title>
+  <meta name="description" content="A short 5-minute AI interview to clarify requirements and highlight your strengths.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="top-text">
+        <p class="breadcrumbs"><a href="/apply" class="btn-quiet">&larr; Back to Application</a></p>
+        <h1>AI Verification Interview</h1>
+        <p class="lede" id="interview-role-heading">Role: Senior Backend Engineer (5 questions, ~5 minutes)</p>
+      </div>
+      <div class="mode ai" role="status">AI Interview Active</div>
+    </header>
+
+    <main>
+      <!-- Transparency Notice (Required by Non-negotiable safety rules) -->
+      <section class="notice transparency-notice" aria-labelledby="transparency-h">
+        <h2 id="transparency-h" class="notice-title">Notice: You are speaking with an AI</h2>
+        <ul class="disclosure-list">
+          <li><strong>Purpose:</strong> To clarify skills and experience not explicitly detailed on your CV.</li>
+          <li><strong>Who sees this:</strong> Only the human recruiter reviewing your application. The AI does not make hiring decisions.</li>
+          <li><strong>Your control:</strong> You can skip any question or stop the interview at any time.</li>
+        </ul>
+      </section>
+
+      <!-- Chat Container -->
+      <section id="chat-card" class="card chat-card" aria-label="Interview Conversation">
+        <div class="chat-header">
+          <span id="progress-indicator">Question 1 of 5</span>
+          <button type="button" id="btn-stop" class="btn-quiet danger">Stop and Finish</button>
+        </div>
+
+        <div id="chat-messages" class="chat-messages" role="log" aria-live="polite">
+          <!-- Messages will be appended here -->
+        </div>
+
+        <div id="typing-indicator" class="typing-indicator" hidden aria-hidden="true">
+          <span></span><span></span><span></span> AI is formulating question…
+        </div>
+
+        <form id="chat-form" class="chat-input-area">
+          <label for="answer-input" class="visually-hidden">Your response</label>
+          <textarea id="answer-input" rows="3" maxlength="1500" placeholder="Type your answer here… Be specific about projects, scale, and ownership." required></textarea>
+          <div class="chat-actions">
+            <button type="button" id="btn-skip" class="btn-quiet">Skip this question</button>
+            <button type="submit" id="btn-send" class="btn-main">Send Answer</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Completion & Summary Section -->
+      <section id="summary-section" class="card summary-card" hidden aria-labelledby="summary-h">
+        <h2 id="summary-h">Interview Complete</h2>
+        <p class="hint">Here is the exact summary generated for the recruiter. You can review it or choose to delete all your interview data.</p>
+
+        <div class="recruiter-summary-box">
+          <div class="summary-head">
+            <h3>Recruiter Verification Summary</h3>
+            <span id="confidence-badge" class="tag strong">Confidence: High</span>
+          </div>
+          <p id="summary-body" class="summary-text"></p>
+
+          <div class="summary-details">
+            <div class="summary-col">
+              <h4>Confirmed Requirements</h4>
+              <ul id="confirmed-reqs"></ul>
+            </div>
+            <div class="summary-col">
+              <h4>Still Open / For Discussion</h4>
+              <ul id="open-reqs"></ul>
+            </div>
+          </div>
+
+          <h4>Suggested Follow-up Questions for Recruiter</h4>
+          <ol id="follow-up-list" class="follow-up-list"></ol>
+        </div>
+
+        <div class="summary-actions">
+          <a href="/" class="btn-main">Go to Recruiter Screener</a>
+          <button type="button" id="btn-delete-interview" class="btn-quiet danger">Delete My Interview Data</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p>Under NDPA 2023, you retain full ownership of your interview transcript. No automated rejection decisions are ever made.</p>
+    </footer>
+  </div>
+
+  <script src="engine.js"></script>
+  <script src="interview.js"></script>
+</body>
+</html>

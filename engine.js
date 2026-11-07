@@ -317,6 +317,190 @@
     return rows.map(function (r) { return r.map(csvCell).join(','); }).join('\n');
   }
 
+  /* ---------- Contact & Phone Normalisation (Phase 1 & 2) ---------- */
+
+  var NG_PREFIXES = new Set([
+    '701', '702', '703', '704', '705', '706', '707', '708', '709',
+    '802', '803', '804', '805', '806', '807', '808', '809',
+    '810', '811', '812', '813', '814', '815', '816', '817', '818', '819',
+    '901', '902', '903', '904', '905', '906', '907', '908', '909',
+    '911', '912', '913', '914', '915', '916'
+  ]);
+
+  function normalizePhone(input) {
+    if (!input || typeof input !== 'string') {
+      return { valid: false, e164: '', error: 'Phone number is required.' };
+    }
+    var raw = input.trim();
+    if (!raw) {
+      return { valid: false, e164: '', error: 'Phone number cannot be empty.' };
+    }
+
+    // Check for letters or illegal characters (allow digits, +, -, space, (, ))
+    if (/[^\d+\s\-()]/i.test(raw)) {
+      return { valid: false, e164: '', error: 'Phone number contains invalid characters.' };
+    }
+
+    // Check leading plus or double-zero
+    var hasPlus = raw.startsWith('+');
+    var digits = raw.replace(/\D/g, '');
+
+    if (raw.startsWith('00')) {
+      hasPlus = true;
+      digits = digits.slice(2);
+    }
+
+    // Handle Nigerian formats:
+    // Case 1: starts with 234 or +234
+    if (hasPlus && digits.startsWith('234')) {
+      var rest = digits.slice(3);
+      if (rest.startsWith('0')) rest = rest.slice(1); // Handle +234080... error
+      if (rest.length === 10 && NG_PREFIXES.has(rest.slice(0, 3))) {
+        return { valid: true, e164: '+234' + rest, national: '0' + rest, digits: '234' + rest };
+      }
+      return { valid: false, e164: '', error: 'Invalid Nigerian phone number length or prefix.' };
+    }
+
+    if (!hasPlus && digits.startsWith('234') && digits.length === 13) {
+      var restNoPlus = digits.slice(3);
+      if (restNoPlus.startsWith('0')) restNoPlus = restNoPlus.slice(1);
+      if (restNoPlus.length === 10 && NG_PREFIXES.has(restNoPlus.slice(0, 3))) {
+        return { valid: true, e164: '+234' + restNoPlus, national: '0' + restNoPlus, digits: '234' + restNoPlus };
+      }
+    }
+
+    // Case 2: standard Nigerian domestic format (e.g. 0803 123 4567, 11 digits starting with 0)
+    if (!hasPlus && digits.length === 11 && digits.startsWith('0')) {
+      var pfx = digits.slice(1, 4);
+      if (NG_PREFIXES.has(pfx)) {
+        return { valid: true, e164: '+234' + digits.slice(1), national: digits, digits: '234' + digits.slice(1) };
+      }
+      return { valid: false, e164: '', error: 'Unknown Nigerian network prefix (' + pfx + ').' };
+    }
+
+    // Case 3: 10 digits without leading 0 (e.g. 8031234567)
+    if (!hasPlus && digits.length === 10 && NG_PREFIXES.has(digits.slice(0, 3))) {
+      return { valid: true, e164: '+234' + digits, national: '0' + digits, digits: '234' + digits };
+    }
+
+    // Case 4: International format with leading + (7 to 15 digits ITU-T E.164 standard)
+    if (hasPlus) {
+      if (digits.length >= 7 && digits.length <= 15) {
+        return { valid: true, e164: '+' + digits, national: digits, digits: digits };
+      }
+      return { valid: false, e164: '', error: 'International phone numbers must be between 7 and 15 digits.' };
+    }
+
+    return { valid: false, e164: '', error: 'Please enter a valid phone number (e.g. 0803 123 4567 or +234 803 123 4567).' };
+  }
+
+  function renderTemplate(template, vars) {
+    var str = String(template || '');
+    var v = vars || {};
+    return str.replace(/\{([^{}]+)\}/g, function (_, key) {
+      var k = key.trim().toLowerCase();
+      if (k === 'first name' || k === 'firstname') return v.firstName || '';
+      if (k === 'recruiter name' || k === 'recruitername') return v.recruiterName || '';
+      if (k === 'company') return v.company || '';
+      if (k === 'role') return v.role || '';
+      return v[key] || '';
+    });
+  }
+
+  function buildWhatsAppLink(phoneE164, template, vars) {
+    var norm = normalizePhone(phoneE164);
+    if (!norm.valid) return '';
+    var msg = renderTemplate(template, vars);
+    return 'https://wa.me/' + norm.digits + (msg ? '?text=' + encodeURIComponent(msg) : '');
+  }
+
+  function buildTelLink(phoneE164) {
+    var norm = normalizePhone(phoneE164);
+    if (!norm.valid) return '';
+    return 'tel:' + norm.e164;
+  }
+
+  function buildMailtoLink(email, subject, body) {
+    var addr = String(email || '').trim();
+    if (!addr || !addr.includes('@')) return '';
+    var params = [];
+    if (subject) params.push('subject=' + encodeURIComponent(subject));
+    if (body) params.push('body=' + encodeURIComponent(body));
+    return 'mailto:' + addr + (params.length ? '?' + params.join('&') : '');
+  }
+
+  /* Extract contact fields from OCR text */
+  function extractContacts(text) {
+    var raw = String(text || '');
+    var out = {
+      name: '',
+      phone: '',
+      email: '',
+      location: '',
+      links: { linkedin: '', github: '', portfolio: '' }
+    };
+
+    // 1. Email extraction (handles noisy OCR with spaces around @ or dots)
+    var emailRe = /\b([a-zA-Z0-9._%+-]+(?:\s*@\s*|\s*\[at\]\s*)[a-zA-Z0-9.-]+\s*\.\s*[a-zA-Z]{2,})\b/i;
+    var em = emailRe.exec(raw);
+    if (em) {
+      out.email = em[1].replace(/\s+/g, '').replace(/\[at\]/i, '@');
+    }
+
+    // 2. Phone extraction (Nigerian domestic or international)
+    var phoneMatches = raw.match(/(?:\(\+234\)|(?:\+234|234|0))\s*\(?[789][01]\d{1}\)?[\s\-]?\d{3}[\s\-]?\d{4}|\+?\d{1,3}[\s\-]?\(?\d{2,4}\)?[\s\-]?\d{3,4}[\s\-]?\d{3,4}/g);
+    if (phoneMatches) {
+      for (var p = 0; p < phoneMatches.length; p++) {
+        var cleanCandidate = phoneMatches[p].replace(/[^\d+]/g, '');
+        var n = normalizePhone(cleanCandidate);
+        if (n.valid) {
+          out.phone = n.e164;
+          break;
+        }
+      }
+    }
+
+    // 3. Links
+    var liRe = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9%_-]+)/i;
+    var li = liRe.exec(raw);
+    if (li) out.links.linkedin = 'https://linkedin.com/in/' + li[1];
+
+    var ghRe = /(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9%_-]+)/i;
+    var gh = ghRe.exec(raw);
+    if (gh && gh[1].toLowerCase() !== 'features' && gh[1].toLowerCase() !== 'pricing') {
+      out.links.github = 'https://github.com/' + gh[1];
+    }
+
+    var webRe = /(?:https?:\/\/)([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s)]*)?)/i;
+    var wm = webRe.exec(raw);
+    if (wm) {
+      var url = wm[0];
+      if (!url.includes('linkedin.com') && !url.includes('github.com')) {
+        out.links.portfolio = url;
+      }
+    }
+
+    // 4. Location heuristic
+    var locRe = /\b(Lagos|Abuja|Port Harcourt|Ibadan|Enugu|Kano|Benin City|Kaduna|Nigeria|Remote|London|New York|Berlin|Toronto|Accra|Nairobi)\b/i;
+    var lm = locRe.exec(raw);
+    if (lm) out.location = lm[0];
+
+    // 5. Name: candidate name heuristic from top non-header lines
+    var lines = raw.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+    for (var i = 0; i < Math.min(5, lines.length); i++) {
+      var line = lines[i];
+      if (line.length >= 3 && line.length <= 40 && !/[\d@:/\\+–—|]/.test(line) && !/curriculum|resume|cv|profile|contact/i.test(line)) {
+        var words = line.split(/\s+/);
+        if (words.length >= 2 && words.length <= 4) {
+          out.name = line;
+          break;
+        }
+      }
+    }
+
+    return out;
+  }
+
   return {
     checkRequirement: checkRequirement,
     demoScreen: demoScreen,
@@ -326,6 +510,12 @@
     extractRequirements: extractRequirements,
     guessName: guessName,
     toCsv: toCsv,
-    weightOf: weightOf
+    weightOf: weightOf,
+    normalizePhone: normalizePhone,
+    renderTemplate: renderTemplate,
+    buildWhatsAppLink: buildWhatsAppLink,
+    buildTelLink: buildTelLink,
+    buildMailtoLink: buildMailtoLink,
+    extractContacts: extractContacts
   };
 });

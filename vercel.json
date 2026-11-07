@@ -1,5 +1,9 @@
 {
   "functions": {
-    "api/screen.js": { "maxDuration": 60 }
-  }
+    "api/*.js": { "maxDuration": 60 }
+  },
+  "rewrites": [
+    { "source": "/apply", "destination": "/apply.html" },
+    { "source": "/interview", "destination": "/interview.html" }
+  ]
 }

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Apply for Role - Scout Screener</title>
+  <meta name="description" content="Submit your CV via photo, screenshot or PDF. You review and verify all details before submitting.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <!-- Client-side PDF and OCR extraction libraries (free, run on-device) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="top-text">
+        <p class="breadcrumbs"><a href="/" class="btn-quiet">&larr; Back to Recruiter Screener</a></p>
+        <h1>Candidate Application</h1>
+        <p class="lede">Upload your CV as a photo, screenshot, or PDF. We extract the text locally on your device so you can review and fix every detail before sending.</p>
+      </div>
+      <div class="privacy-badge" role="note">
+        <strong>Privacy first</strong>
+        <span>Extraction runs on your device.</span>
+      </div>
+    </header>
+
+    <main>
+      <!-- Step 1: Upload -->
+      <section id="upload-section" class="card upload-section" aria-labelledby="upload-h">
+        <h2 id="upload-h">1. Upload your CV</h2>
+        <p class="hint">Take a photo of your CV, upload a screenshot, or select a PDF document.</p>
+
+        <div id="dropzone" class="dropzone" tabindex="0" role="region" aria-label="CV File Dropzone">
+          <input type="file" id="cvfile" accept=".pdf,image/png,image/jpeg,image/webp,image/jpg" class="visually-hidden">
+          <div class="drop-prompt">
+            <span class="drop-icon" aria-hidden="true">&#128196;</span>
+            <p><strong>Drag and drop your CV here</strong>, or <button type="button" class="btn-quiet" id="browse-btn">browse files</button></p>
+            <p class="drop-sub">PDF, PNG, JPG, or WEBP (Max 5MB)</p>
+          </div>
+        </div>
+
+        <div id="ocr-status" class="status-box" hidden aria-live="polite">
+          <div class="spinner" aria-hidden="true"></div>
+          <p id="ocr-msg">Extracting text directly in your browser…</p>
+        </div>
+
+        <div id="vision-fallback-box" class="notice vision-box" hidden>
+          <p><strong>Photo hard to read?</strong> You can optionally use our server-side AI Vision model on Groq to read difficult handwriting or low-contrast photos.</p>
+          <div class="row">
+            <button type="button" class="btn-quiet" id="btn-use-vision">Read it better with Groq Vision</button>
+            <span class="subtext">Requires sending image to server.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 2: Confirm & Edit Extracted Details -->
+      <section id="review-section" class="card review-section" aria-labelledby="review-h">
+        <h2 id="review-h">2. Confirm your details</h2>
+        <p class="hint">OCR can misread characters (like 0 and O, or 1 and l). Please check and edit all fields below before submitting.</p>
+
+        <form id="apply-form" novalidate>
+          <div class="form-grid">
+            <div class="form-field full-width">
+              <label for="f-role" class="field-label">Role you are applying for</label>
+              <input type="text" id="f-role" maxlength="100" value="Senior Backend Engineer (Python / Go)" required>
+            </div>
+
+            <div class="form-field">
+              <label for="f-name" class="field-label">Full Name</label>
+              <input type="text" id="f-name" maxlength="80" placeholder="e.g. Adaeze Okafor" required>
+            </div>
+
+            <div class="form-field">
+              <label for="f-phone" class="field-label">Phone Number (Nigerian or International)</label>
+              <input type="tel" id="f-phone" placeholder="e.g. 0803 123 4567 or +234 803 123 4567">
+              <p id="phone-feedback" class="field-msg" aria-live="polite"></p>
+            </div>
+
+            <div class="form-field">
+              <label for="f-email" class="field-label">Email Address</label>
+              <input type="email" id="f-email" placeholder="e.g. adaeze@example.com" required>
+            </div>
+
+            <div class="form-field">
+              <label for="f-location" class="field-label">Location (City, Country)</label>
+              <input type="text" id="f-location" placeholder="e.g. Lagos, Nigeria">
+            </div>
+
+            <div class="form-field">
+              <label for="f-linkedin" class="field-label">LinkedIn Profile URL</label>
+              <input type="url" id="f-linkedin" placeholder="https://linkedin.com/in/username">
+            </div>
+
+            <div class="form-field">
+              <label for="f-github" class="field-label">GitHub or Portfolio URL</label>
+              <input type="url" id="f-github" placeholder="https://github.com/username">
+            </div>
+          </div>
+
+          <div class="form-field full-width">
+            <label for="f-cv" class="field-label">Extracted CV Text</label>
+            <p class="hint">This is the text the recruiter's screener will evaluate against role requirements.</p>
+            <textarea id="f-cv" rows="10" maxlength="12000" placeholder="Paste or verify your CV content here..." required></textarea>
+          </div>
+
+          <!-- Consent Checkbox (Unticked by default) -->
+          <div class="consent-block">
+            <label class="checkbox-label" for="f-consent">
+              <input type="checkbox" id="f-consent" name="consent">
+              <span><strong>Recruiters I apply to can see my contact details.</strong> (If unchecked, recruiters only see your CV qualifications and evidence; contact details stay private).</span>
+            </label>
+          </div>
+
+          <div class="submit-row">
+            <button type="submit" id="submit-btn" class="btn-main">Submit Application</button>
+            <p id="submit-status" class="status" role="status"></p>
+          </div>
+        </form>
+      </section>
+
+      <!-- Step 3: Success & AI Interview Invitation -->
+      <section id="success-section" class="card success-section" hidden aria-labelledby="success-h">
+        <h2 id="success-h">Application Submitted</h2>
+        <div class="notice success-notice">
+          <p><strong>Your application has been received!</strong></p>
+          <p>Your unique application reference link:</p>
+          <p class="app-link"><code id="cand-link"></code></p>
+        </div>
+
+        <div class="interview-invite">
+          <h3>Optional: Take a 5-Minute AI Interview</h3>
+          <p>The AI will ask about 5 short questions focused on clarifying things not stated in your CV against the role requirements. This helps you demonstrate strengths before the recruiter decides.</p>
+          <div class="row">
+            <button type="button" id="start-interview-btn" class="btn-main">Start Short AI Interview</button>
+            <button type="button" id="delete-app-btn" class="btn-quiet danger">Delete My Application Data</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p>Data Protection Notice: We collect only the information necessary for job matching. Under the Nigeria Data Protection Act 2023 (NDPA), your data is handled with explicit consent, retained for at most 30 days, and you may delete your application at any time.</p>
+    </footer>
+  </div>
+
+  <script src="engine.js"></script>
+  <script src="apply.js"></script>
+</body>
+</html>

@@ -10,10 +10,11 @@
 
   var state = {
     reqs: [],
-    cands: [{ id: uid('c'), name: '', cv: '' }],
+    cands: [{ id: uid('c'), name: '', cv: '', phone: '', email: '', consent: false }],
     out: null,       // { list, reqs, usedAi, failMsg }
     decisions: {},   // candidate id -> shortlist | ask | pass
-    ai: false
+    ai: false,
+    revealedContacts: {} // candidate id -> boolean
   };
 
   function esc(s) {
@@ -141,11 +142,73 @@
 
   $('sample').addEventListener('click', function () {
     $('jd').value = Samples.JOB;
+    $('rec-role').value = 'Founding Backend Engineer';
     state.reqs = Engine.extractRequirements(Samples.JOB).map(function (r) { return { id: uid('r'), text: r.text, weight: r.weight }; });
-    state.cands = Samples.CANDIDATES.map(function (c) { return { id: uid('c'), name: c.name, cv: c.cv }; });
+    state.cands = Samples.CANDIDATES.map(function (c) {
+      return {
+        id: uid('c'),
+        name: c.name,
+        cv: c.cv,
+        phone: c.phone || '',
+        email: c.email || '',
+        consent: Boolean(c.consent)
+      };
+    });
     renderReqs();
     renderCands();
-    say('Sample role and four made-up candidates loaded. Press Screen candidates.');
+    say('Sample role and four made-up candidates loaded with contact info. Press Screen candidates.');
+  });
+
+  // Load live applicants from Candidate Portal
+  $('load-applicants').addEventListener('click', async function () {
+    say('Loading applicants from candidate portal…');
+    try {
+      var resp = await fetch('/api/data?action=list_candidates');
+      var list = [];
+      if (resp.ok) {
+        var data = await resp.json();
+        list = data.candidates || [];
+      } else {
+        list = JSON.parse(localStorage.getItem('scout_candidates') || '[]');
+      }
+      if (!list.length) {
+        say('No candidate applications found yet. Candidates can submit via the Candidate Portal (/apply).', true);
+        return;
+      }
+      state.cands = list.map(function (c) {
+        return {
+          id: c.id || uid('c'),
+          name: c.name,
+          cv: c.cv,
+          phone: c.phone || '',
+          email: c.email || '',
+          consent: Boolean(c.consent),
+          interviewSummary: c.interviewSummary || null,
+          interviewConfidence: c.interviewConfidence || null
+        };
+      });
+      renderCands();
+      say('Loaded ' + list.length + ' candidate(s) from portal. Ready to screen.');
+    } catch (err) {
+      var saved = JSON.parse(localStorage.getItem('scout_candidates') || '[]');
+      if (saved.length) {
+        state.cands = saved.map(function (c) {
+          return {
+            id: c.id || uid('c'),
+            name: c.name,
+            cv: c.cv,
+            phone: c.phone || '',
+            email: c.email || '',
+            consent: Boolean(c.consent),
+            interviewSummary: c.interviewSummary || null
+          };
+        });
+        renderCands();
+        say('Loaded ' + saved.length + ' candidate(s) from local storage. Ready to screen.');
+      } else {
+        say('Could not load portal applicants: ' + err.message, true);
+      }
+    }
   });
 
   /* ---------- Run ---------- */
@@ -156,7 +219,18 @@
       .map(function (r) { return { id: r.id, text: r.text.trim(), weight: r.weight }; })
       .filter(function (r) { return r.text; });
     var cands = state.cands
-      .map(function (c, i) { return { id: c.id, name: c.name.trim() || Engine.guessName(c.cv, i), cv: c.cv.trim() }; })
+      .map(function (c, i) {
+        return {
+          id: c.id,
+          name: c.name.trim() || Engine.guessName(c.cv, i),
+          cv: c.cv.trim(),
+          phone: c.phone || '',
+          email: c.email || '',
+          consent: Boolean(c.consent),
+          interviewSummary: c.interviewSummary || null,
+          interviewConfidence: c.interviewConfidence || null
+        };
+      })
       .filter(function (c) { return c.cv.length >= 20; });
 
     if (!reqs.length) { say('Add at least one requirement first.', true); return; }
@@ -183,6 +257,18 @@
       }
     }
     if (!list) list = Engine.demoScreen(reqs, cands);
+
+    // Attach candidate contact details and interview info to results
+    var candMap = {};
+    cands.forEach(function (c) { candMap[c.id] = c; });
+    list.forEach(function (res) {
+      var orig = candMap[res.id] || {};
+      res.phone = orig.phone || '';
+      res.email = orig.email || '';
+      res.consent = Boolean(orig.consent);
+      res.interviewSummary = orig.interviewSummary || null;
+      res.interviewConfidence = orig.interviewConfidence || null;
+    });
 
     state.out = { list: list, reqs: reqs, usedAi: usedAi, failMsg: failMsg };
     state.decisions = {};
@@ -246,8 +332,59 @@
       var label = sc.now + ' percent match. ' + sc.counts.met + ' of ' + reqs.length + ' requirements stated.';
       var up = sc.potential > sc.now ? '<small>up to ' + sc.potential + '% if verified</small>' : '';
 
+      // Contact buttons (Phase 2)
+      var contactHtml = '';
+      var isRevealed = Boolean(state.revealedContacts[r.id]);
+      if (r.consent) {
+        var firstName = (r.name || '').split(/\s+/)[0] || 'there';
+        var recName = ($('rec-name') && $('rec-name').value) || 'Recruiter';
+        var recCompany = ($('rec-company') && $('rec-company').value) || 'Our Team';
+        var recRole = ($('rec-role') && $('rec-role').value) || 'Backend Engineer';
+        var tpl = ($('rec-template') && $('rec-template').value) ||
+          "Hi {first name}, I'm {recruiter name} from {company}. I saw your CV for the {role} role and would like a quick chat. Are you free this week?";
+
+        var vars = { firstName: firstName, recruiterName: recName, company: recCompany, role: recRole };
+        var waUrl = Engine.buildWhatsAppLink(r.phone, tpl, vars);
+        var telUrl = Engine.buildTelLink(r.phone);
+        var mailUrl = Engine.buildMailtoLink(r.email, 'Interview for ' + recRole + ' role at ' + recCompany,
+          Engine.renderTemplate(tpl, vars));
+
+        var linksHtml = isRevealed ? (
+          '<div class="contact-panel">' +
+            '<p class="contact-info"><strong>Phone:</strong> ' + esc(r.phone || 'Not provided') + ' &bull; <strong>Email:</strong> ' + esc(r.email || 'Not provided') + '</p>' +
+            '<div class="contact-links">' +
+              (waUrl ? '<a href="' + esc(waUrl) + '" target="_blank" rel="noopener noreferrer" class="contact-btn wa">&#128172; WhatsApp</a>' : '') +
+              (telUrl ? '<a href="' + esc(telUrl) + '" class="contact-btn tel">&#128222; Call</a>' : '') +
+              (mailUrl ? '<a href="' + esc(mailUrl) + '" class="contact-btn mail">&#9993; Email</a>' : '') +
+            '</div>' +
+          '</div>'
+        ) : '';
+
+        contactHtml = '<div class="contact-block">' +
+          '<button type="button" class="btn-quiet toggle-contact" data-act="toggle-contact" data-id="' + esc(r.id) + '">' +
+            (isRevealed ? 'Hide contact' : 'Show contact') +
+          '</button>' +
+          linksHtml +
+        '</div>';
+      } else {
+        contactHtml = '<div class="contact-block"><span class="contact-withheld">&#128274; Contact details withheld by candidate</span></div>';
+      }
+
+      // Interview summary (Phase 3)
+      var interviewHtml = '';
+      if (r.interviewSummary) {
+        interviewHtml = '<div class="interview-summary-card">' +
+          '<h4>AI Verification Interview Summary</h4>' +
+          (r.interviewConfidence ? '<span class="tag ' + (r.interviewConfidence === 'high' ? 'strong' : 'look') + '">Confidence: ' + esc(r.interviewConfidence) + '</span>' : '') +
+          '<p class="interview-text">' + esc(r.interviewSummary) + '</p>' +
+        '</div>';
+      }
+
+      var prevEl = document.querySelector('details.person[data-id="' + r.id + '"]');
+      var wasOpen = Boolean(state.revealedContacts[r.id] || (prevEl && prevEl.open));
+
       return '<li>' +
-        '<details class="person" data-id="' + esc(r.id) + '">' +
+        '<details class="person" data-id="' + esc(r.id) + '"' + (wasOpen ? ' open' : '') + '>' +
           '<summary>' +
             '<span class="rank">' + (i + 1) + '</span>' +
             '<span class="who"><strong>' + esc(r.name) + '</strong><span class="decided" data-for="' + esc(r.id) + '"></span></span>' +
@@ -258,6 +395,8 @@
             '<p class="suggest"><span class="tag ' + sug.code + '">' + esc(sug.text) + '</span>' + esc(r.summary || '') + '</p>' +
             '<table class="checks"><thead><tr><th>Requirement</th><th>Status</th><th>Evidence from the CV</th></tr></thead><tbody>' + trs + '</tbody></table>' +
             qs +
+            interviewHtml +
+            contactHtml +
             '<div class="pick" role="group" aria-label="Your decision for ' + esc(r.name) + '"><span class="label">Your decision</span>' +
               ['shortlist', 'ask', 'pass'].map(function (v) {
                 return '<button type="button" data-act="decide" data-id="' + esc(r.id) + '" data-val="' + v + '" aria-pressed="false">' + DECISION_LABEL[v] + '</button>';
@@ -300,6 +439,14 @@
   }
 
   $('ranking').addEventListener('click', function (e) {
+    var toggleBtn = e.target.closest('button[data-act="toggle-contact"]');
+    if (toggleBtn) {
+      var cid = toggleBtn.dataset.id;
+      state.revealedContacts[cid] = !state.revealedContacts[cid];
+      renderResults();
+      return;
+    }
+
     var btn = e.target.closest('button[data-act="decide"]');
     if (!btn) return;
     var id = btn.dataset.id, val = btn.dataset.val;
@@ -317,7 +464,14 @@
   $('export').addEventListener('click', function () {
     var out = state.out;
     if (!out) return;
-    var rows = [['Candidate', 'Match %', 'Up to % if verified', 'Suggestion', 'Your decision', 'Not stated', 'Contradicted']];
+    var includeContacts = $('csv-contacts') && $('csv-contacts').checked;
+
+    var headers = ['Candidate', 'Match %', 'Up to % if verified', 'Suggestion', 'Your decision', 'Not stated', 'Contradicted'];
+    if (includeContacts) {
+      headers.push('Phone', 'Email', 'Consent');
+    }
+    var rows = [headers];
+
     out.list.map(function (r) {
       var sc = Engine.score(out.reqs, r.checks);
       return { r: r, sc: sc };
@@ -328,9 +482,28 @@
           return (k ? k.status : 'not_stated') === status;
         }).map(function (q) { return q.text; }).join('; ');
       };
-      rows.push([x.r.name, x.sc.now, x.sc.potential, Engine.suggestion(x.sc).text,
-        state.decisions[x.r.id] ? DECISION_LABEL[state.decisions[x.r.id]] : '', names('not_stated'), names('not_met')]);
+
+      var rowData = [
+        x.r.name,
+        x.sc.now,
+        x.sc.potential,
+        Engine.suggestion(x.sc).text,
+        state.decisions[x.r.id] ? DECISION_LABEL[state.decisions[x.r.id]] : '',
+        names('not_stated'),
+        names('not_met')
+      ];
+
+      if (includeContacts) {
+        rowData.push(
+          x.r.phone || '',
+          x.r.email || '',
+          x.r.consent ? 'Consented' : 'Withheld'
+        );
+      }
+
+      rows.push(rowData);
     });
+
     var blob = new Blob([Engine.toCsv(rows)], { type: 'text/csv;charset=utf-8' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

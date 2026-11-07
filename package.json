@@ -4,8 +4,14 @@
   "private": true,
   "description": "Rank candidates against a role, with evidence from each CV. A human makes the decision.",
   "scripts": {
-    "test": "node test/engine.test.js",
+    "test": "node test/engine.test.js && node test/contacts.test.js && node test/api.test.js",
+    "test:browser": "node test/browser.test.js",
     "dev": "npx vercel dev"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.0"
+  }
 }

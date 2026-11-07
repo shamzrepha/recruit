@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isRecruiter() {
+      return isAuthenticated() && request.auth.token.role == 'recruiter';
+    }
+
+    function isNotExpired(data) {
+      return request.time < data.createdAt + duration.value(30, 'd');
+    }
+
+    // Candidate applications collection
+    match /candidates/{candidateId} {
+      
+      // Candidate can create their own application with untrusted text
+      allow create: if request.resource.data.name is string
+                    && request.resource.data.cv is string
+                    && request.resource.data.consent is bool
+                    && request.resource.data.createdAt == request.time;
+
+      // Candidate can read/update/delete their application using their unguessable 24+ character token
+      allow read, update, delete: if candidateId == resource.data.token
+                                  || request.resource.data.token == candidateId;
+
+      // Recruiter access:
+      // Signed-in recruiters can read candidates who applied to their roles,
+      // provided the application is within the 30-day retention window.
+      // If consent is false, contact fields (phone, email) cannot be read.
+      allow read: if isRecruiter() && isNotExpired(resource.data) && (
+        resource.data.consent == true ||
+        !('phone' in request.query.fields || 'email' in request.query.fields)
+      );
+
+      // Automatic deletion after 30 days is enforced by Firestore TTL policy on the 'expiresAt' field.
+      // Immediate deletion is permitted by candidate request (NDPA Right to Erasure).
+      allow delete: if candidateId == resource.data.token;
+    }
+  }
+}

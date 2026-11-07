@@ -14,11 +14,37 @@
   <div class="wrap">
     <header class="top">
       <div class="top-text">
+        <div class="top-nav">
+          <a href="/apply" class="nav-pill">&#128196; Candidate Portal (Upload CV)</a>
+        </div>
         <h1>Scout Screener</h1>
         <p class="lede">Rank candidates against a role and see the evidence in each CV. The AI suggests. You decide.</p>
       </div>
       <p id="mode" class="mode" role="status">Checking mode…</p>
     </header>
+
+    <!-- Recruiter Context & Outreach Settings (Phase 2) -->
+    <details class="recruiter-settings" id="recruiter-box">
+      <summary><strong>Outreach & Recruiter Settings</strong> <span>Configure WhatsApp/Call/Email template</span></summary>
+      <div class="settings-grid">
+        <div>
+          <label for="rec-name" class="field-label">Your Name</label>
+          <input type="text" id="rec-name" value="Tolu Adebayo" placeholder="Recruiter Name">
+        </div>
+        <div>
+          <label for="rec-company" class="field-label">Company</label>
+          <input type="text" id="rec-company" value="Sourcing Sprints" placeholder="Company Name">
+        </div>
+        <div>
+          <label for="rec-role" class="field-label">Role Title</label>
+          <input type="text" id="rec-role" value="Founding Backend Engineer" placeholder="Role Title">
+        </div>
+        <div class="full-col">
+          <label for="rec-template" class="field-label">Outreach Message Template (supports {first name}, {recruiter name}, {company}, {role})</label>
+          <input type="text" id="rec-template" value="Hi {first name}, I'm {recruiter name} from {company}. I saw your CV for the {role} role and would like a quick chat. Are you free this week?">
+        </div>
+      </div>
+    </details>
 
     <ul class="legend" aria-label="How to read a match bar">
       <li><span class="seg s-met"></span> Stated in the CV</li>
@@ -52,6 +78,7 @@
           <div id="cands"></div>
           <div class="row">
             <button type="button" class="btn-quiet" id="addcand">Add a candidate</button>
+            <button type="button" class="btn-quiet" id="load-applicants">Load applicants from portal</button>
           </div>
         </section>
       </div>
@@ -65,7 +92,12 @@
         <div class="results-head">
           <h2 id="results-h">Results</h2>
           <p id="tally" class="tally"></p>
-          <button type="button" class="btn-quiet" id="export">Download as CSV</button>
+          <div class="export-group">
+            <label class="csv-toggle-label">
+              <input type="checkbox" id="csv-contacts"> Include contact details in CSV
+            </label>
+            <button type="button" class="btn-quiet" id="export">Download as CSV</button>
+          </div>
         </div>
         <p id="fallback" class="notice" hidden></p>
         <ol id="ranking" class="ranking"></ol>

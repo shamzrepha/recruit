@@ -1,0 +1,203 @@
+{
+  "candidates": [
+    {
+      "id": "c_ea831f1761629936d7b3b876b8412947",
+      "token": "c_ea831f1761629936d7b3b876b8412947",
+      "name": "Adaeze Okafor",
+      "role": "Senior Backend Engineer (Python / Go)",
+      "phone": "+2348031234567",
+      "email": "adaeze@example.com",
+      "location": "Lagos, Nigeria",
+      "links": {
+        "linkedin": "https://linkedin.com/in/adaeze-okafor",
+        "github": ""
+      },
+      "cv": "Adaeze Okafor\nSenior Backend Engineer, 5 years experience\nBuilt payment APIs in Python (FastAPI) and Go on PostgreSQL database.\nShipped production APIs used by over 40 merchants with 2M daily requests.\nInfrastructure on AWS with Docker.",
+      "consent": true,
+      "createdAt": "2026-11-07T20:54:07.784Z",
+      "expiresAt": "2026-12-07T20:54:07.784Z",
+      "interviewSummary": null,
+      "interviewTranscript": null
+    },
+    {
+      "id": "c_b69bb470c8f73b985faf349c07ea7028",
+      "token": "c_b69bb470c8f73b985faf349c07ea7028",
+      "name": "Ada",
+      "role": "Software Engineer",
+      "phone": "",
+      "email": "",
+      "location": "",
+      "links": {},
+      "cv": "test cv 1234567890 1234567890 1234567890",
+      "consent": false,
+      "createdAt": "2026-11-07T20:54:32.335Z",
+      "expiresAt": "2026-12-07T20:54:32.335Z",
+      "interviewSummary": null,
+      "interviewTranscript": null
+    },
+    {
+      "id": "c_5e19859b5e63445e20da43caceb647f9",
+      "token": "c_5e19859b5e63445e20da43caceb647f9",
+      "name": "Adaeze",
+      "role": "Senior Backend Engineer (Python / Go)",
+      "phone": "+2348031234567",
+      "email": "ada@test.com",
+      "location": "",
+      "links": {
+        "linkedin": "",
+        "github": ""
+      },
+      "cv": "Adaeze CV text with more than thirty characters long here.",
+      "consent": false,
+      "createdAt": "2026-11-07T20:54:51.876Z",
+      "expiresAt": "2026-12-07T20:54:51.876Z",
+      "interviewSummary": null,
+      "interviewTranscript": null
+    },
+    {
+      "id": "c_cbcf86b1148943daa1727de0f5d2e77f",
+      "token": "c_cbcf86b1148943daa1727de0f5d2e77f",
+      "name": "Adaeze Okafor",
+      "role": "Senior Backend Engineer (Python / Go)",
+      "phone": "+2348031234567",
+      "email": "adaeze@example.com",
+      "location": "Lagos, Nigeria",
+      "links": {
+        "linkedin": "https://linkedin.com/in/adaeze-okafor",
+        "github": ""
+      },
+      "cv": "Adaeze Okafor\nSenior Backend Engineer, 5 years experience\nBuilt payment APIs in Python (FastAPI) and Go on PostgreSQL database.\nShipped production APIs used by over 40 merchants with 2M daily requests.\nInfrastructure on AWS with Docker.",
+      "consent": true,
+      "createdAt": "2026-11-07T20:55:49.647Z",
+      "expiresAt": "2026-12-07T20:55:49.647Z",
+      "interviewSummary": "The candidate answered verification questions for Senior Backend Engineer (Python / Go). Demonstrated hands-on engineering experience stating: \"Relevant engineering background.\". Key technical capabilities are consistent with role requirements. Confidence in this summary: medium.",
+      "interviewTranscript": [
+        {
+          "role": "ai",
+          "text": "Hello Adaeze Okafor! I am Scout Screener’s AI assistant. My goal is to ask a few questions to clarify your background for the recruiter. You can skip any question or stop whenever you like. Let’s begin!"
+        },
+        {
+          "role": "ai",
+          "text": "Could you describe your most significant project relevant to the Senior Backend Engineer (Python / Go) role and what you personally built?"
+        }
+      ],
+      "interviewConfidence": "medium"
+    },
+    {
+      "id": "c_483f084def003754c11d5aa5f4a36c3a",
+      "token": "c_483f084def003754c11d5aa5f4a36c3a",
+      "name": "Adaeze Okafor",
+      "role": "Senior Backend Engineer (Python / Go)",
+      "phone": "+2348031234567",
+      "email": "adaeze@example.com",
+      "location": "Lagos, Nigeria",
+      "links": {
+        "linkedin": "https://linkedin.com/in/adaeze-okafor",
+        "github": ""
+      },
+      "cv": "Adaeze Okafor\nSenior Backend Engineer, 5 years experience\nBuilt payment APIs in Python (FastAPI) and Go on PostgreSQL database.\nShipped production APIs used by over 40 merchants with 2M daily requests.\nInfrastructure on AWS with Docker.",
+      "consent": true,
+      "createdAt": "2026-11-07T20:57:05.581Z",
+      "expiresAt": "2026-12-07T20:57:05.581Z",
+      "interviewSummary": "The candidate answered verification questions for Senior Backend Engineer (Python / Go). Demonstrated hands-on engineering experience stating: \"Relevant engineering background.\". Key technical capabilities are consistent with role requirements. Confidence in this summary: medium.",
+      "interviewTranscript": [
+        {
+          "role": "ai",
+          "text": "Hello Adaeze Okafor! I am Scout Screener’s AI assistant. My goal is to ask a few questions to clarify your background for the recruiter. You can skip any question or stop whenever you like. Let’s begin!"
+        },
+        {
+          "role": "ai",
+          "text": "Could you describe your most significant project relevant to the Senior Backend Engineer (Python / Go) role and what you personally built?"
+        }
+      ],
+      "interviewConfidence": "medium"
+    },
+    {
+      "id": "c_1daadc568582b045f814df56fbd090d2",
+      "token": "c_1daadc568582b045f814df56fbd090d2",
+      "name": "Adaeze Okafor",
+      "role": "Senior Backend Engineer (Python / Go)",
+      "phone": "+2348031234567",
+      "email": "adaeze@example.com",
+      "location": "Lagos, Nigeria",
+      "links": {
+        "linkedin": "https://linkedin.com/in/adaeze-okafor",
+        "github": ""
+      },
+      "cv": "Adaeze Okafor\nSenior Backend Engineer, 5 years experience\nBuilt payment APIs in Python (FastAPI) and Go on PostgreSQL database.\nShipped production APIs used by over 40 merchants with 2M daily requests.\nInfrastructure on AWS with Docker.",
+      "consent": true,
+      "createdAt": "2026-11-07T20:57:59.927Z",
+      "expiresAt": "2026-12-07T20:57:59.927Z",
+      "interviewSummary": "The candidate answered verification questions for Senior Backend Engineer (Python / Go). Demonstrated hands-on engineering experience stating: \"Relevant engineering background.\". Key technical capabilities are consistent with role requirements. Confidence in this summary: medium.",
+      "interviewTranscript": [
+        {
+          "role": "ai",
+          "text": "Hello Adaeze Okafor! I am Scout Screener’s AI assistant. My goal is to ask a few questions to clarify your background for the recruiter. You can skip any question or stop whenever you like. Let’s begin!"
+        },
+        {
+          "role": "ai",
+          "text": "Could you describe your most significant project relevant to the Senior Backend Engineer (Python / Go) role and what you personally built?"
+        }
+      ],
+      "interviewConfidence": "medium"
+    },
+    {
+      "id": "c_ce50572e30066eb72c2b5451a763836d",
+      "token": "c_ce50572e30066eb72c2b5451a763836d",
+      "name": "Adaeze Okafor",
+      "role": "Senior Backend Engineer (Python / Go)",
+      "phone": "+2348031234567",
+      "email": "adaeze@example.com",
+      "location": "Lagos, Nigeria",
+      "links": {
+        "linkedin": "https://linkedin.com/in/adaeze-okafor",
+        "github": ""
+      },
+      "cv": "Adaeze Okafor\nSenior Backend Engineer, 5 years experience\nBuilt payment APIs in Python (FastAPI) and Go on PostgreSQL database.\nShipped production APIs used by over 40 merchants with 2M daily requests.\nInfrastructure on AWS with Docker.",
+      "consent": true,
+      "createdAt": "2026-11-07T20:59:00.667Z",
+      "expiresAt": "2026-12-07T20:59:00.667Z",
+      "interviewSummary": "The candidate answered verification questions for Senior Backend Engineer (Python / Go). Demonstrated hands-on engineering experience stating: \"Relevant engineering background.\". Key technical capabilities are consistent with role requirements. Confidence in this summary: medium.",
+      "interviewTranscript": [
+        {
+          "role": "ai",
+          "text": "Hello Adaeze Okafor! I am Scout Screener’s AI assistant. My goal is to ask a few questions to clarify your background for the recruiter. You can skip any question or stop whenever you like. Let’s begin!"
+        },
+        {
+          "role": "ai",
+          "text": "Could you describe your most significant project relevant to the Senior Backend Engineer (Python / Go) role and what you personally built?"
+        }
+      ],
+      "interviewConfidence": "medium"
+    },
+    {
+      "id": "c_8886d31c112e5bc1d6b96c8251af7bb0",
+      "token": "c_8886d31c112e5bc1d6b96c8251af7bb0",
+      "name": "Adaeze Okafor",
+      "role": "Senior Backend Engineer (Python / Go)",
+      "phone": "+2348031234567",
+      "email": "adaeze@example.com",
+      "location": "Lagos, Nigeria",
+      "links": {
+        "linkedin": "https://linkedin.com/in/adaeze-okafor",
+        "github": ""
+      },
+      "cv": "Adaeze Okafor\nSenior Backend Engineer, 5 years experience\nBuilt payment APIs in Python (FastAPI) and Go on PostgreSQL database.\nShipped production APIs used by over 40 merchants with 2M daily requests.\nInfrastructure on AWS with Docker.",
+      "consent": true,
+      "createdAt": "2026-11-07T21:00:08.532Z",
+      "expiresAt": "2026-12-07T21:00:08.532Z",
+      "interviewSummary": "The candidate answered verification questions for Senior Backend Engineer (Python / Go). Demonstrated hands-on engineering experience stating: \"Relevant engineering background.\". Key technical capabilities are consistent with role requirements. Confidence in this summary: medium.",
+      "interviewTranscript": [
+        {
+          "role": "ai",
+          "text": "Hello Adaeze Okafor! I am Scout Screener’s AI assistant. My goal is to ask a few questions to clarify your background for the recruiter. You can skip any question or stop whenever you like. Let’s begin!"
+        },
+        {
+          "role": "ai",
+          "text": "Could you describe your most significant project relevant to the Senior Backend Engineer (Python / Go) role and what you personally built?"
+        }
+      ],
+      "interviewConfidence": "medium"
+    }
+  ]
+}
