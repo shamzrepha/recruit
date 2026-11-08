@@ -377,6 +377,71 @@ function fakeRes() {
   assert.strictEqual(res.body.requirements.length, 3);
   assert.strictEqual(res.body.requirements[0].weight, 'must');
 
+
+  /* =========================================================================
+     7. OFFLINE MODES (no key) are honest, CV-based and never invent a role
+     ========================================================================= */
+  delete process.env.GROQ_API_KEY;
+  const CV7 = 'Ngozi Eze\nWORK EXPERIENCE\nSales Associate, Shoprite  Jan 2020 - Present\n- Served 80 customers a day\nEDUCATION\nUniversity of Nigeria, Nsukka\nB.Sc Economics 2015 - 2019\nSKILLS\nExcel, Customer service';
+  const reqs7 = [{ text: '2+ years in retail sales' }, { text: 'Experience managing a team' }];
+
+  const cvParse = require('../api/cv-parse.js');
+  res = fakeRes();
+  await cvParse({ method: 'POST', body: { text: CV7 } }, res);
+  assert.strictEqual(res.body.ai, false);
+  assert.strictEqual(res.body.profile.name, 'Ngozi Eze');
+  assert.strictEqual(res.body.profile.experience[0].company, 'Shoprite');
+  assert.strictEqual(res.body.profile.education[0].school, 'University of Nigeria, Nsukka');
+  res = fakeRes();
+  await cvParse({ method: 'POST', body: { text: 'hi' } }, res);
+  assert.strictEqual(res.code, 400);
+
+  const q7 = async (i, extra) => {
+    res = fakeRes();
+    await interviewHandler({ method: 'POST', query: { action: 'next_question' }, body: Object.assign({ role: 'Sales Lead', requirements: reqs7, cv: CV7, transcript: [], questionIndex: i }, extra) }, res);
+    return res.body;
+  };
+  const q1 = await q7(0), q2 = await q7(1), q3 = await q7(2);
+  assert.ok(q1.question.includes('Shoprite'), 'question 1 names the real employer: ' + q1.question);
+  assert.ok(/retail sales|managing a team/.test(q2.question), 'question 2 asks about a requirement the CV does not show: ' + q2.question);
+  assert.ok(/next job/.test(q3.question) && q3.isFinal === true && q1.isFinal === false, 'three questions, the last is final');
+  assert.ok(![q1, q2, q3].some((x) => x.demo), 'no fake demo flag');
+  res = fakeRes();
+  await interviewHandler({ method: 'POST', query: { action: 'summarize' }, body: { role: 'Sales Lead', requirements: reqs7, cv: CV7, transcript: [{ role: 'ai', text: 'Q' }, { role: 'candidate', text: 'I enjoyed helping customers find what they needed.' }] } }, res);
+  assert.ok(res.body.summary.includes('not connected') && res.body.summary.includes('helping customers'), 'offline summary quotes the candidate only');
+  assert.deepStrictEqual(res.body.confirmedReqs, [], 'nothing is claimed as confirmed offline');
+
+  res = fakeRes();
+  await roleIntakeHandler({ method: 'POST', query: { action: 'generate' }, body: { messages: [
+    { role: 'ai', text: 'What do you need?' },
+    { role: 'recruiter', text: 'We are hiring a Store Manager in Abuja. Requirements:\n- 3+ years managing a retail store\n- Strong customer service\nNice to have:\n- Experience with POS systems' }
+  ] } }, res);
+  assert.strictEqual(res.body.ai, false);
+  assert.strictEqual(res.body.title.toLowerCase(), 'store manager', 'title comes from what the recruiter said: ' + res.body.title);
+  assert.strictEqual(res.body.location, 'Abuja');
+  assert.ok(res.body.requirements.length >= 2 && !JSON.stringify(res.body).includes('Backend'), 'no canned backend role');
+
+  const assistant = require('../api/assistant.js');
+  res = fakeRes();
+  await assistant({ method: 'POST', body: { message: 'show me the top 30 candidates who know excel', jobs: [{ id: 'j_1', title: 'Store Manager' }], currentJobId: 'j_1' } }, res);
+  assert.strictEqual(res.body.intent.action, 'top'); assert.strictEqual(res.body.intent.n, 30); assert.deepStrictEqual(res.body.intent.skills, ['excel']);
+
+  // With a key, the assistant only ever sends the message and job titles, and its output is sanitised.
+  process.env.GROQ_API_KEY = 'test-key';
+  let sentBody7 = null;
+  const realFetch7 = global.fetch;
+  global.fetch = async (url, init) => {
+    sentBody7 = init.body;
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify({ action: 'delete_everything', n: 9999, jobId: 'j_evil', stage: 'x', skills: ['Excel'], location: 'Lagos', minScore: 500, interviewed: false, reply: 'Sure.' }) } }] }) };
+  };
+  res = fakeRes();
+  await assistant({ method: 'POST', body: { message: 'top candidates', jobs: [{ id: 'j_1', title: 'Store Manager' }], currentJobId: 'j_1' } }, res);
+  global.fetch = realFetch7;
+  assert.strictEqual(res.body.intent.action, 'top', 'unknown actions are rejected');
+  assert.strictEqual(res.body.intent.n, 100); assert.strictEqual(res.body.intent.jobId, 'j_1'); assert.strictEqual(res.body.intent.minScore, 100);
+  assert.ok(sentBody7.includes('Store Manager') && !sentBody7.includes('phone'), 'only the request and job titles are sent');
+  delete process.env.GROQ_API_KEY;
+
   console.log('All API & security tests passed successfully!');
 })().catch((e) => {
   console.error('API Test Error:', e);

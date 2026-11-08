@@ -39,6 +39,20 @@ async function rejects(p, status, re) {
   assert.strictEqual((await ops.jobGet({ id: job.id })).job.title, 'Founding Backend Engineer');
   await rejects(ops.jobGet({ id: 'j_nope' }), 404);
 
+  /* ---- public job board ---- */
+  assert.strictEqual(job.type, 'Full-time');
+  assert.strictEqual(job.workMode, 'On-site');
+  assert.strictEqual((await ops.jobsOpen({})).jobs.length, 1, 'open listed job is on the board');
+  assert.strictEqual((await ops.jobsOpen({})).jobs[0].keyHash, undefined);
+  const hidden = await ops.jobCreate({ title: 'Hidden', requirements: REQS, listed: false, type: 'nonsense', workMode: 'Remote', location: 'Lagos' });
+  assert.strictEqual(hidden.job.type, 'Full-time', 'bad type falls back');
+  assert.strictEqual(hidden.job.workMode, 'Remote');
+  assert.strictEqual((await ops.jobsOpen({})).jobs.length, 1, 'unlisted jobs stay off the board');
+  await ops.jobUpdate({ id: hidden.job.id, key: hidden.key, patch: { listed: true } });
+  assert.strictEqual((await ops.jobsOpen({})).jobs.length, 2);
+  await ops.jobUpdate({ id: hidden.job.id, key: hidden.key, patch: { status: 'closed' } });
+  assert.strictEqual((await ops.jobsOpen({})).jobs.length, 1, 'closed jobs leave the board');
+
   /* ---- recruiter access control ---- */
   await rejects(ops.candidates({ jobId: job.id, key: 'wrong' }), 403);
   await rejects(ops.candidates({ jobId: job.id }), 403);
@@ -90,12 +104,29 @@ async function rejects(p, status, re) {
   const after = (await ops.candidates({ jobId: job.id, key })).candidates.find(c => c.id === id1);
   assert.strictEqual(after.screen.checks[1].status, 'not_stated', 'bad status is normalised');
   assert.strictEqual(after.screen.questions.length, 4, 'questions are capped');
+  assert.strictEqual(after.screen.now, null, 'now is optional');
   assert.strictEqual(after.stage, 'shortlist', 'screening does not change the stage');
 
   // A recruiter of another job cannot touch this job's candidates.
   const other = await ops.jobCreate({ title: 'Other', requirements: REQS });
   await rejects(ops.candidatePatch({ jobId: other.job.id, key: other.key, candId: id1, patch: { stage: 'pass' } }), 404);
   await rejects(ops.candidates({ jobId: job.id, key: other.key }), 403, /does not match/);
+
+  /* ---- anonymous score distribution + profile ---- */
+  await ops.screensSave({ jobId: job.id, key, results: [{ candId: id1, screen: Object.assign({}, screen, { now: 82.4 }) }] });
+  const dist = await ops.jobScores({ id: job.id });
+  assert.deepStrictEqual(dist, { scores: [82] }, 'only anonymous numbers are shared');
+  const withProfile = await ops.apply({
+    jobId: job.id, name: 'Profile Person', cv: CV, consent: false, phone: '1', email: 'x@y.com',
+    profile: { name: 'Profile Person', email: 'x@y.com', phone: '+234800', skills: ['Python', 'SQL'], yearsExperience: '4', education: [{ school: 'FUTO', qualification: 'B.Eng' }], experience: [{ company: 'Acme', title: 'Engineer', highlights: ['Built things'] }], links: { linkedin: 'javascript:x' } }
+  });
+  const pr = (await ops.candidates({ jobId: job.id, key })).candidates.find(c => c.id === withProfile.token);
+  assert.deepStrictEqual(pr.profile.skills, ['Python', 'SQL']);
+  assert.strictEqual(pr.profile.yearsExperience, 4);
+  assert.strictEqual(pr.profile.email, '', 'profile contact hidden without consent');
+  assert.strictEqual(pr.profile.links.linkedin, '');
+  assert.strictEqual(pr.profile.experience[0].highlights[0], 'Built things');
+  await ops.candidateDelete({ token: withProfile.token });
 
   /* ---- candidate view and interview ---- */
   const mine = await ops.candidateGet({ token: id1 });

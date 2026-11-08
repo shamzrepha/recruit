@@ -58,7 +58,9 @@
           <div class="field"><label class="label" for="f-linkedin">LinkedIn</label><input type="url" id="f-linkedin" placeholder="https://linkedin.com/in/you"></div>
           <div class="field"><label class="label" for="f-github">GitHub or portfolio</label><input type="url" id="f-github" placeholder="https://github.com/you"></div>
         </div>
-        <div class="field"><label class="label" for="f-cv">Your CV text</label><p class="hint">This is what the recruiter&rsquo;s screening reads.</p><textarea id="f-cv" rows="10" maxlength="12000" required></textarea></div>
+        <p id="parse-note" class="hint"></p>
+        <div id="profile-card" class="card pad"></div>
+        <details class="field"><summary class="link-btn">Edit the CV text Scout read</summary><textarea id="f-cv" rows="10" maxlength="12000" required></textarea></details>
         <label class="consent" for="f-consent"><input type="checkbox" id="f-consent"><span><strong>Let the recruiter see my phone and email.</strong><br><span class="hint">Leave this unticked and they see your CV only. Your contact details are then not stored at all.</span></span></label>
         <p id="submit-status" class="field-msg error" role="alert"></p>
         <div class="row"><button type="button" class="btn ghost" id="btn-back"><svg class="ic" aria-hidden="true"><use href="#i-arrow-left"/></svg> Back</button><button type="submit" class="btn lg" id="submit-btn">Submit application</button></div>
@@ -67,8 +69,9 @@
 
     <section id="success-section" hidden aria-labelledby="done-h">
       <div class="block-head"><h2 id="done-h">You have applied.</h2><p id="done-sub"></p></div>
+      <div id="fit-card" class="card pad" hidden style="margin-bottom:20px"></div>
       <div class="stack-lg">
-        <div><h3 style="font-size:1.05rem">Optional: a short AI chat</h3><p class="muted">Five questions about your experience. It gives the recruiter more to go on, and you can skip any question or stop at any time.</p>
+        <div><h3 style="font-size:1.05rem">Optional: a short AI chat</h3><p class="muted">Three plain questions about your experience. It gives the recruiter more to go on, and you can skip any question or stop at any time.</p>
           <div class="row" style="margin-top:12px"><a class="btn" id="start-interview" href="#">Start the AI chat <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></a></div></div>
         <div><h3 style="font-size:1.05rem">Your private link</h3><p class="muted">Keep this to come back to the chat or delete your application later. It works for this device and anyone you give it to.</p>
           <div class="link-box"><code id="cand-link"></code><button type="button" class="btn sm" id="copy-link">Copy</button></div></div>
@@ -82,6 +85,7 @@
 <script src="engine.js"></script>
 <script src="core.js"></script>
 <script src="data.js"></script>
+<script src="cvtools.js"></script>
 <script src="apply.js"></script>
 </body>
 </html>

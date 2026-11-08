@@ -20,6 +20,9 @@
   var DAY = 24 * 60 * 60 * 1000;
   var CANDIDATE_TTL = 30 * DAY;
   var JOB_TTL = 90 * DAY;
+  var JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship'];
+  var WORK_MODES = ['On-site', 'Hybrid', 'Remote'];
+  function pick(v, list, dflt) { return list.indexOf(v) >= 0 ? v : dflt; }
   var STAGES = ['new', 'shortlist', 'ask', 'pass'];
   var MAX_REQS = 20;
 
@@ -32,6 +35,35 @@
   }
 
   function clip(s, n) { return String(s == null ? '' : s).slice(0, n); }
+
+  // The structured profile built from a CV. Everything is length-limited text.
+  function cleanProfile(p) {
+    if (!p || typeof p !== 'object') return null;
+    var strs = function (x, n, m) { return (Array.isArray(x) ? x : []).slice(0, n).map(function (v) { return clip(v, m).trim(); }).filter(Boolean); };
+    var rows = function (x, n, fields) {
+      return (Array.isArray(x) ? x : []).slice(0, n).map(function (r) {
+        var o = {};
+        Object.keys(fields).forEach(function (k) { o[k] = clip(r && r[k], fields[k]).trim(); });
+        if (fields.highlights !== undefined) o.highlights = strs(r && r.highlights, 4, 200);
+        return o;
+      });
+    };
+    var links = p.links || {};
+    var yrs = parseFloat(p.yearsExperience);
+    return {
+      name: clip(p.name, 80).trim(), headline: clip(p.headline, 120).trim(), location: clip(p.location, 80).trim(),
+      email: clip(p.email, 80).trim(), phone: clip(p.phone, 30).trim(),
+      links: { linkedin: cleanUrl(links.linkedin), github: cleanUrl(links.github), portfolio: cleanUrl(links.portfolio) },
+      summary: clip(p.summary, 400).trim(),
+      skills: strs(p.skills, 30, 40),
+      yearsExperience: isFinite(yrs) ? Math.max(0, Math.min(60, yrs)) : null,
+      education: rows(p.education, 6, { school: 100, qualification: 100, field: 100, start: 12, end: 12 }),
+      experience: rows(p.experience, 10, { company: 100, title: 100, start: 12, end: 12, highlights: 0 }),
+      certifications: strs(p.certifications, 10, 100),
+      languages: strs(p.languages, 8, 30),
+      suggestedRoles: strs(p.suggestedRoles, 4, 80)
+    };
+  }
 
   function webcrypto() {
     if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) return globalThis.crypto;
@@ -176,6 +208,8 @@
     function jobPublic(j) {
       return {
         id: j.id, title: j.title, company: j.company, jd: j.jd,
+        location: j.location || '', type: j.type || 'Full-time', workMode: j.workMode || 'On-site',
+        listed: j.listed !== false,
         requirements: j.requirements, status: j.status, createdAt: j.createdAt
       };
     }
@@ -183,7 +217,10 @@
     // What a recruiter may see of a candidate.
     function forRecruiter(c) {
       var out = JSON.parse(JSON.stringify(c));
-      if (!out.consent) { out.phone = ''; out.email = ''; }
+      if (!out.consent) {
+        out.phone = ''; out.email = '';
+        if (out.profile) { out.profile.phone = ''; out.profile.email = ''; }
+      }
       if (out.interview) delete out.interview.transcript;
       return out;
     }
@@ -232,11 +269,16 @@
         title: title,
         company: clip(a.company, 80).trim(),
         jd: clip(a.jd, 6000),
+        location: clip(a.location, 80).trim(),
+        type: pick(a.type, JOB_TYPES, 'Full-time'),
+        workMode: pick(a.workMode, WORK_MODES, 'On-site'),
+        listed: a.listed !== false,
         requirements: reqs,
         status: 'open',
         createdAt: new Date(now()).toISOString()
       };
       await kv.set('job:' + job.id, job, JOB_TTL);
+      await kv.sadd('jobs:index', job.id);
       return { job: jobPublic(job), key: key };
     };
 
@@ -257,9 +299,39 @@
         if (!reqs.length) throw fail(400, 'Keep at least one requirement.');
         j.requirements = reqs;
       }
+      if (p.location != null) j.location = clip(p.location, 80).trim();
+      if (p.type != null) j.type = pick(p.type, JOB_TYPES, j.type || 'Full-time');
+      if (p.workMode != null) j.workMode = pick(p.workMode, WORK_MODES, j.workMode || 'On-site');
+      if (p.listed != null) j.listed = p.listed !== false;
       if (p.status === 'open' || p.status === 'closed') j.status = p.status;
       await kv.set('job:' + j.id, j, JOB_TTL);
+      await kv.sadd('jobs:index', j.id);
       return { job: jobPublic(j) };
+    };
+
+    // The public job board: open roles the recruiter chose to list.
+    ops.jobsOpen = async function () {
+      var ids = await kv.smembers('jobs:index');
+      var out = [];
+      for (var i = 0; i < ids.length; i++) {
+        var j = await kv.get('job:' + ids[i]);
+        if (!j) { await kv.srem('jobs:index', ids[i]); continue; }
+        if (j.status === 'open' && j.listed !== false) out.push(jobPublic(j));
+      }
+      out.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });
+      return { jobs: out };
+    };
+
+    // Anonymous match scores of a job's screened applicants, so a candidate can see where they would rank.
+    ops.jobScores = async function (a) {
+      var job = await loadJob(a.id);
+      var ids = await kv.smembers('jobcands:' + job.id);
+      var scores = [];
+      for (var i = 0; i < ids.length; i++) {
+        var c = await kv.get('cand:' + ids[i]);
+        if (c && c.screen && typeof c.screen.now === 'number') scores.push(c.screen.now);
+      }
+      return { scores: scores };
     };
 
     /* ---- candidate side ---- */
@@ -282,6 +354,7 @@
         location: clip(a.location, 80),
         links: { linkedin: cleanUrl(links.linkedin), github: cleanUrl(links.github) },
         cv: cv,
+        profile: cleanProfile(a.profile),
         consent: a.consent === true,
         source: 'applied',
         stage: 'new',
@@ -368,6 +441,7 @@
       return {
         reqSig: clip(s.reqSig, 400),
         usedAi: s.usedAi === true,
+        now: isFinite(parseFloat(s.now)) ? Math.max(0, Math.min(100, Math.round(parseFloat(s.now)))) : null,
         at: clip(s.at, 40),
         summary: clip(s.summary, 400),
         checks: (Array.isArray(s.checks) ? s.checks : []).slice(0, MAX_REQS).map(function (k) {
@@ -432,7 +506,7 @@
     memoryKV: memoryKV,
     localKV: localKV,
     upstashKV: upstashKV,
-    OPS: ['jobCreate', 'jobGet', 'jobUpdate', 'apply', 'candidateGet', 'interviewSave', 'candidateDelete',
+    OPS: ['jobCreate', 'jobGet', 'jobsOpen', 'jobScores', 'jobUpdate', 'apply', 'candidateGet', 'interviewSave', 'candidateDelete',
       'candidates', 'candidateAdd', 'candidatePatch', 'screensSave', 'candidateRemove'],
     STAGES: STAGES,
     CANDIDATE_TTL: CANDIDATE_TTL

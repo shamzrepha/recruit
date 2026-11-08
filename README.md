@@ -2,12 +2,15 @@
 
 Rank candidates against a role and see the evidence from each CV. The AI suggests. A human decides.
 
-## How it works
+## The three pages
 
-1. **Recruiter** opens `/hire`, creates a job (chat with the AI, or paste a description) and edits the requirements.
-2. The job gets an **apply link** for candidates and a **private recruiter link** for you (Share tab).
-3. **Candidates** open the apply link, upload a CV (PDF, photo or screenshot, read on their own device), check the details and submit. Contact details are stored only if they tick the consent box. They can then do an optional 5-question AI chat.
-4. **Recruiter** sees applicants ranked best first, with evidence per requirement (Stated / Not stated, verify / CV says otherwise), questions to ask, the AI chat summary (never the raw answers), and WhatsApp / Call / Email buttons for consenting candidates.
+- **`/` Landing**: two doors, "I'm looking to hire" and "I'm looking for work".
+- **`/hire` Employers**: dashboard, jobs, post-a-job (a short chat where Scout asks about the company and the role, then writes the job post and requirements), a kanban pipeline per job (drag to move stages), a candidate drawer with the full profile, evidence, AI chat summary and contact buttons, and **Ask Scout**, an assistant. Type "show me the top 30 candidates" (or "top 10 in Lagos who know sales", "above 70%", "shortlist the top 5") and it lists ranked cards; click one to read the whole CV.
+- **`/jobs` Job seekers**: upload a CV once (PDF, photo or pasted text). Scout builds a profile (contact details, schools, jobs, skills, roadmap), scores every open role, shows where you would rank (estimated top X%), and lets you apply to the roles you pick. There is also a browse tab with every open role. `/apply?job=...` is the direct link a recruiter can share.
+
+After applying, candidates can do a 3-question chat, written like a recruiter would ask, from their CV. Recruiters see a summary, never the raw answers.
+
+Rankings are estimates. The "top X%" uses the anonymous scores of people who applied so far and shows only when at least 3 have applied.
 
 ## Storage: read this before demoing
 
@@ -18,7 +21,7 @@ Rank candidates against a role and see the evidence from each CV. The AI suggest
 
 | Name | Purpose |
 |---|---|
-| `GROQ_API_KEY` | Turns on AI screening, interview, role chat and vision OCR. Without it the app uses keyword matching and canned questions. |
+| `GROQ_API_KEY` | Turns on AI screening, interview, role chat and vision OCR. Without it the app says so and falls back to a basic CV reader and keyword matching, which is rougher. |
 | `GROQ_MODEL`, `GROQ_VISION_MODEL` | Optional model overrides. |
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` (or `KV_REST_API_URL` / `_TOKEN`) | Shared storage. |
 

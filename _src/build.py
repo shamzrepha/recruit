@@ -5,6 +5,7 @@ sprite = (src/'sprite.html').read_text().strip()
 bar = (src/'topbar.html').read_text().strip()
 cfg = {
   'index':     dict(hire='', cand=''),
+  'jobs':      dict(hire='', cand=' aria-current="page"'),
   'apply':     dict(hire='', cand=' aria-current="page"'),
   'interview': dict(hire='', cand=' aria-current="page"'),
 }

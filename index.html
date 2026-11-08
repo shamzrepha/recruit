@@ -3,14 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Scout Screener - AI-Powered Talent Sourcing for Early-Stage Startups</title>
-  <meta name="description" content="The AI suggests. A human decides. Evidence-based candidate screening for founders and recruiters.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%2314213d'/%3E%3Crect x='6' y='7' width='16' height='3.5' rx='1.5' fill='%231f8f4e'/%3E%3Crect x='6' y='12.25' width='16' height='3.5' rx='1.5' fill='%23d99a1c'/%3E%3Crect x='6' y='17.5' width='10' height='3.5' rx='1.5' fill='%23f6f4ee'/%3E%3C/svg%3E">
-  <link rel="preload" href="/fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <title>Scout - Hiring, matched fairly</title>
+  <meta name="description" content="Upload a CV and see the roles you fit, with an honest ranking. Or post a role and review ranked applicants. AI suggests, people decide.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%232563eb'/%3E%3Crect x='6' y='7' width='16' height='3.5' rx='1.5' fill='%23fff'/%3E%3Crect x='6' y='12.25' width='16' height='3.5' rx='1.5' fill='%23fff' fill-opacity='.7'/%3E%3Crect x='6' y='17.5' width='10' height='3.5' rx='1.5' fill='%23fff' fill-opacity='.45'/%3E%3C/svg%3E">
   <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="landing-body">
+<body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
   <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
   <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
@@ -27,139 +26,64 @@
   <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
   <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></symbol>
   <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></symbol>
+
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1v-8z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-board" viewBox="0 0 24 24"><rect x="3.5" y="4" width="5" height="16" rx="1.2"/><rect x="10" y="4" width="5" height="10" rx="1.2"/><rect x="16.5" y="4" width="4" height="13" rx="1.2"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9 6.8 19.7l1-5.9L3.5 9.7l5.9-.8L12 3.5z"/></symbol>
 </svg>
 <header class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="/" aria-label="Scout Screener home">
-      <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#14213d"/><rect x="6" y="7" width="16" height="3.5" rx="1.5" fill="#1f8f4e"/><rect x="6" y="12.25" width="16" height="3.5" rx="1.5" fill="#d99a1c"/><rect x="6" y="17.5" width="10" height="3.5" rx="1.5" fill="#f6f4ee"/></svg>
-      <span class="brand-word">Scout Screener</span>
-    </a>
-    <nav class="topnav" aria-label="Main">
-      <a href="/hire">For recruiters</a>
-      <a href="/#candidates">For candidates</a>
-    </nav>
+    <div class="topbar-left">
+      <a class="brand" href="/" aria-label="Scout home">
+        <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#2563eb"/><rect x="6" y="7" width="16" height="3.5" rx="1.5" fill="#fff"/><rect x="6" y="12.25" width="16" height="3.5" rx="1.5" fill="#fff" fill-opacity=".7"/><rect x="6" y="17.5" width="10" height="3.5" rx="1.5" fill="#fff" fill-opacity=".45"/></svg>
+        <span class="brand-word">Scout</span>
+      </a>
+      <nav class="topnav" aria-label="Main">
+        <a href="/jobs">Find work</a>
+        <a href="/hire">For employers</a>
+      </nav>
+    </div>
+    <div class="topbar-right">
+      <a class="btn sm" href="/hire#/new">Post a job</a>
+    </div>
   </div>
 </header>
+<main>
+<section class="land-hero">
+  <div class="land-hero-in">
+    <span class="eyebrow">AI-assisted recruiting. People decide.</span>
+    <h1>Hire the right person.<br>Find the right role.</h1>
+    <p>Scout reads CVs the way a careful recruiter would, shows the evidence behind every score, and keeps phone numbers and emails private until a candidate says yes.</p>
+    <div class="doors">
+      <a class="door" href="/hire#/new"><span class="door-ic"><svg class="ic" aria-hidden="true"><use href="#i-briefcase"/></svg></span><span class="door-t">I&rsquo;m looking to hire</span><span class="door-d">Tell Scout about your company in a short chat. Get a job post, an apply link, and applicants ranked against what you need.</span><span class="door-go">Post a job <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></span></a>
+      <a class="door alt" href="/jobs"><span class="door-ic"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg></span><span class="door-t">I&rsquo;m looking for work</span><span class="door-d">Upload your CV once. See which open roles you fit, where you would rank, and apply to the ones you choose.</span><span class="door-go">Find my matches <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></span></a>
+    </div>
+  </div>
+</section>
 
-  <main>
-    <section class="hero" aria-labelledby="hero-h">
-      <div>
-        <p class="eyebrow">AI-assisted candidate screening</p>
-        <h1 class="hero-title" id="hero-h" style="margin-top:16px">The AI suggests.<br><em>A human decides.</em></h1>
-        <p class="lede">Rank candidates against a role and see the evidence from each CV. &ldquo;Not stated&rdquo; means <strong>verify</strong>, never <strong>reject</strong>.</p>
-        <div class="hero-cta">
-          <a href="/hire" class="btn lg">Start hiring <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></a>
-          <a href="#how" class="link-btn" style="text-decoration:none">See how a hire runs</a>
-        </div>
-      </div>
+<section class="land-sec">
+  <h2>How it works</h2>
+  <div class="steps3">
+    <div><span class="n">1</span><h3>Upload a CV</h3><p>PDF, photo or pasted text. Scout builds a clean profile: contact details, schools, jobs, skills and a career timeline.</p></div>
+    <div><span class="n">2</span><h3>See your fit</h3><p>Every open role is scored against its requirements. You see what matches, what is missing, and roughly where you would rank.</p></div>
+    <div><span class="n">3</span><h3>Apply to the ones you want</h3><p>Pick one role or five. Recruiters see ranked profiles, with the evidence from each CV quoted back.</p></div>
+  </div>
+</section>
 
-      <div class="proof" role="group" aria-label="Example screening result">
-        <div class="proof-head"><strong>Founding Backend Engineer</strong><span class="eyebrow">Example</span></div>
-        <div class="proof-row">
-          <span class="n">1</span><span class="nm">Adaeze Okafor</span><span class="pc">100%</span>
-          <div class="bar" role="img" aria-label="Adaeze Okafor: all 6 requirements stated">
-            <span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:1"></span><span class="seg s-met" style="flex:1"></span>
-          </div>
-        </div>
-        <div class="proof-row">
-          <span class="n">2</span><span class="nm">Ibrahim Sule</span><span class="pc">71%</span>
-          <div class="bar" role="img" aria-label="Ibrahim Sule: 4 of 6 requirements stated, 2 not stated">
-            <span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-not_stated" style="flex:3"></span><span class="seg s-not_stated" style="flex:1"></span><span class="seg s-met" style="flex:1"></span>
-          </div>
-          <span class="up">up to 100%<br>if verified</span>
-        </div>
-        <div class="proof-row">
-          <span class="n">3</span><span class="nm">Tunde Bakare</span><span class="pc">50%</span>
-          <div class="bar" role="img" aria-label="Tunde Bakare: 3 of 6 requirements stated, 3 not stated">
-            <span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-not_stated" style="flex:3"></span><span class="seg s-not_stated" style="flex:3"></span><span class="seg s-met" style="flex:1"></span><span class="seg s-not_stated" style="flex:1"></span>
-          </div>
-          <span class="up">up to 100%<br>if verified</span>
-        </div>
-        <div class="proof-foot">
-          <ul class="legend" aria-label="How to read a match bar">
-            <li><span class="seg s-met"></span> Stated in the CV</li>
-            <li><span class="seg s-not_stated"></span> Not stated, verify</li>
-            <li><span class="seg s-not_met"></span> CV says otherwise</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" aria-labelledby="doors-h">
-      <div class="section-head">
-        <h2 id="doors-h">Two ways in</h2>
-        <p>The same principle on both sides: every claim is checked against what the CV actually says.</p>
-      </div>
-      <div class="doors">
-        <div class="door hire-door">
-          <p class="eyebrow">For founders and recruiters</p>
-          <h3>I am looking to hire</h3>
-          <p>Describe the role to the AI, share one link, and review ranked applicants with the evidence behind every score.</p>
-          <ul>
-            <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Create a job from a chat or a pasted description</li>
-            <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Each job gets its own apply link and private recruiter link</li>
-            <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> WhatsApp, call and email links for candidates who agreed</li>
-          </ul>
-          <div class="go"><a href="/hire" class="btn">Open the recruiting center <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></a></div>
-        </div>
-
-        <div class="door apply-door" id="candidates">
-          <p class="eyebrow">For candidates</p>
-          <h3>I am looking to be employed</h3>
-          <p>Recruiters send you a private application link for their role. Paste it here, or just open it.</p>
-          <form id="paste-form" class="paste-link" novalidate>
-            <label for="paste-input" class="visually-hidden">Application link</label>
-            <input id="paste-input" type="url" placeholder="Paste your application link" autocomplete="off">
-            <button type="submit" class="btn">Open</button>
-          </form>
-          <p id="paste-msg" class="field-msg error" role="alert"></p>
-          <ul>
-            <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Your CV is read on your own device</li>
-            <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> You check every detail before submitting</li>
-            <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Contact details stay private unless you tick the box</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="how" aria-labelledby="how-h">
-      <div class="section-head"><h2 id="how-h">How a hire runs</h2></div>
-      <ol class="flow">
-        <li><h3>Brief the AI</h3><p>Chat about your startup and the role. You get requirements you can edit.</p></li>
-        <li><h3>Share the link</h3><p>Send candidates the job&rsquo;s apply link. They upload a CV and confirm their details.</p></li>
-        <li><h3>Review the evidence</h3><p>Each requirement is Stated, Not stated or Contradicted, with the CV quote behind it.</p></li>
-        <li><h3>You decide</h3><p>Shortlist, ask first or pass. Then message the people you want to talk to.</p></li>
-      </ol>
-    </section>
-
-    <section class="section" aria-labelledby="trust-h">
-      <div class="section-head"><h2 id="trust-h">Built to be fair and checkable</h2></div>
-      <div class="principles">
-        <div><h3>Consent first</h3><p>Contact details are hidden unless the candidate agreed, and are left out of the CSV unless you switch them on.</p></div>
-        <div><h3>No automatic rejections</h3><p>The tool ranks and explains. A person makes every shortlist, hold and pass decision.</p></div>
-        <div><h3>Evidence you can verify</h3><p>Any quote the AI shows is checked against the CV text. If it is not there, the claim becomes &ldquo;not stated&rdquo;.</p></div>
-      </div>
-    </section>
-  </main>
-
-  <footer class="footer" style="margin-top:96px">
-    <p>Built for a Talent Scout Intern application to Sourcing Sprints. Designed around the principles of the Nigeria Data Protection Act 2023: consent, a clear purpose, minimum data and deletion on request. Candidate records expire after 30 days.</p>
-  </footer>
-
-  <script>
-    document.getElementById('paste-form').addEventListener('submit', function (e) {
-      e.preventDefault();
-      var msg = document.getElementById('paste-msg');
-      var v = document.getElementById('paste-input').value.trim();
-      try {
-        var u = new URL(v, location.origin);
-        if (u.pathname.replace(/\/$/, '') === '/apply' && u.searchParams.get('job')) {
-          location.href = '/apply' + u.search;
-          return;
-        }
-      } catch (err) { /* fall through */ }
-      msg.textContent = 'That does not look like an application link. Ask the recruiter to send it again.';
-    });
-  </script>
+<section class="land-sec soft">
+  <div class="split2">
+    <div><h2>Built so a person stays in charge</h2><ul class="ticks"><li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>&ldquo;Not on the CV&rdquo; means <em>verify</em>, never reject.</li><li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Every score links to the line of the CV it came from.</li><li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Phone and email are hidden unless the candidate opts in.</li><li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Recruiters can ask, &ldquo;show me the top 30&rdquo;, and get a ranked list to open and review.</li></ul></div>
+    <div class="land-card"><div class="lc-row"><span class="logo">A</span><div><strong>Amaka O.</strong><small>Backend engineer &middot; Lagos</small></div><span class="match-pill hi">86%</span></div><div class="bar"><span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-not_stated" style="flex:1"></span><span class="seg s-met" style="flex:1"></span></div><p class="small muted">Stated: Node.js, PostgreSQL, 4 years. Verify: Docker. Phone shared by candidate.</p></div>
+  </div>
+</section>
+</main>
+<footer class="footer"><p>Scout uses AI to suggest how well a CV matches a role. A person reviews every application and makes every decision.</p></footer>
 </body>
 </html>

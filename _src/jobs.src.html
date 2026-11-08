@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Find work - Scout</title>
+  <meta name="description" content="Upload your CV once. AI builds your profile, ranks the open roles that fit you, and you apply to the ones you pick.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%232563eb'/%3E%3Crect x='6' y='7' width='16' height='3.5' rx='1.5' fill='%23fff'/%3E%3Crect x='6' y='12.25' width='16' height='3.5' rx='1.5' fill='%23fff' fill-opacity='.7'/%3E%3Crect x='6' y='17.5' width='10' height='3.5' rx='1.5' fill='%23fff' fill-opacity='.45'/%3E%3C/svg%3E">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!--SPRITE-->
+<!--TOPBAR-->
+
+<main class="page">
+  <div class="page-title hub-title">
+    <div><p class="eyebrow">For job seekers</p><h1>Find work that fits your CV</h1>
+    <p class="sub">Upload your CV once. AI builds your profile, ranks the open roles that suit you, and shows where you would stand. You pick the roles and apply in one click.</p></div>
+    <div class="seg-toggle" role="group" aria-label="What would you like to do?">
+      <button type="button" id="tab-match" aria-pressed="true">Match me with my CV</button>
+      <button type="button" id="tab-browse" aria-pressed="false">Browse all roles</button>
+    </div>
+  </div>
+
+  <!-- MATCH FLOW -->
+  <section id="match-panel">
+    <ol id="stepper" class="stepper" aria-label="Steps">
+      <li class="current" aria-current="step">Upload CV</li><li>Your profile</li><li>Roles for you</li><li>Applied</li>
+    </ol>
+
+    <div id="apps-box" class="card pad" hidden style="margin-bottom:24px"></div>
+
+    <div id="step-1">
+      <div class="two-col">
+        <div>
+          <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Choose a CV file or drop it here">
+            <input type="file" id="cvfile" accept=".pdf,image/png,image/jpeg,image/webp" class="visually-hidden" tabindex="-1">
+            <div class="dz-ic"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg></div>
+            <div class="dz-title">Drop your CV here</div>
+            <p class="hint">PDF, or a photo or screenshot (PNG, JPG, WEBP). Up to 5 MB.</p>
+            <button type="button" class="btn" id="browse-btn">Choose a file</button>
+          </div>
+          <p id="upload-msg" class="field-msg error" role="alert"></p>
+          <div id="ocr-status" class="status-box" hidden role="status"><div class="spinner" aria-hidden="true"></div><p id="ocr-msg">Reading&hellip;</p></div>
+          <div id="vision-box" class="banner info" hidden style="margin-top:16px"><span><strong>Photo hard to read?</strong> A Groq vision model can read it instead. That sends the image to our server, and only if you agree.</span><button type="button" class="btn sm secondary" id="btn-vision">Use vision reader</button></div>
+          <p style="margin-top:16px"><button type="button" class="link-btn" id="btn-paste">No file? Paste your CV text instead</button></p>
+          <div id="paste-box" hidden class="stack" style="margin-top:16px"><label class="visually-hidden" for="paste-cv">Your CV text</label><textarea id="paste-cv" rows="10" maxlength="12000" placeholder="Paste your CV here"></textarea><div class="row"><button type="button" class="btn" id="btn-use-paste">Read my CV</button></div></div>
+        </div>
+        <aside class="side-note">
+          <h2>What happens next</h2>
+          <ol class="num-list">
+            <li><span><strong>Your CV is read.</strong> On your device first. Nothing is sent to a recruiter yet.</span></li>
+            <li><span><strong>AI builds your profile:</strong> name, school, jobs, skills, laid out as a roadmap. You check it.</span></li>
+            <li><span><strong>You see roles ranked for you</strong>, how well your CV matches each, and where you would stand among applicants.</span></li>
+            <li><span><strong>You choose</strong> which roles to apply to.</span></li>
+          </ol>
+          <p class="hint" style="margin-top:16px">Your phone and email are shared with a recruiter only if you tick the box.</p>
+        </aside>
+      </div>
+    </div>
+
+    <div id="step-2" hidden>
+      <div class="two-col wide-left">
+        <div id="profile-card" class="card pad"></div>
+        <form id="profile-form" class="card pad stack" novalidate>
+          <h2 class="card-h">Check your details</h2>
+          <p id="parse-note" class="hint"></p>
+          <div class="field"><label class="label" for="f-name">Full name</label><input type="text" id="f-name" maxlength="80" autocomplete="name" required></div>
+          <div class="form-grid">
+            <div class="field"><label class="label" for="f-email">Email</label><input type="email" id="f-email" maxlength="120" autocomplete="email"></div>
+            <div class="field"><label class="label" for="f-phone">Phone</label><input type="tel" id="f-phone" autocomplete="tel"><p id="phone-feedback" class="field-msg" aria-live="polite"></p></div>
+          </div>
+          <div class="field"><label class="label" for="f-location">Where are you based?</label><input type="text" id="f-location" maxlength="80" placeholder="e.g. Lagos, Nigeria"></div>
+          <div class="field"><label class="label" for="f-want">What are you looking for?</label><input type="text" id="f-want" maxlength="120" placeholder="e.g. customer support, data analysis, remote"><span class="hint">Optional. Roles that fit this are shown first.</span></div>
+          <label class="consent" for="f-consent"><input type="checkbox" id="f-consent"><span><strong>Let recruiters see my phone and email</strong> for roles I apply to.<br><span class="hint">Unticked: they see your CV and profile only, and your contact details are not stored.</span></span></label>
+          <p id="form-msg" class="field-msg error" role="alert"></p>
+          <div class="row"><button type="button" class="btn ghost" id="btn-restart"><svg class="ic" aria-hidden="true"><use href="#i-arrow-left"/></svg> Start over</button><button type="submit" class="btn lg">Find roles for me <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="step-3" hidden>
+      <div id="match-status" class="status-box" hidden role="status"><div class="spinner" aria-hidden="true"></div><p id="match-msg"></p></div>
+      <div id="match-results"></div>
+    </div>
+
+    <div id="step-4" hidden></div>
+  </section>
+
+  <!-- BROWSE -->
+  <section id="browse-panel" hidden>
+    <form id="search-form" class="search-bar" role="search">
+      <label class="search-field"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span class="visually-hidden">Job title or keyword</span><input id="q" type="search" placeholder="Job title or keyword" autocomplete="off"></label>
+      <label class="search-field"><svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg><span class="visually-hidden">Location</span><input id="loc" type="search" placeholder="City or &ldquo;Remote&rdquo;" autocomplete="off"></label>
+      <button type="submit" class="btn lg">Search</button>
+    </form>
+    <div class="board-bar"><div id="type-filters" class="filters" role="group" aria-label="Job type"></div><p id="count" class="muted small" role="status"></p></div>
+    <div id="split" class="board-split"></div>
+  </section>
+</main>
+
+<div id="apply-bar" class="apply-bar" hidden><div class="apply-bar-in"><span id="apply-count"></span><div class="row"><button type="button" class="btn ghost sm" id="btn-select-best">Select best matches</button><button type="button" class="btn lg" id="btn-apply">Apply</button></div></div></div>
+
+<footer class="footer"><p>Scout uses AI to suggest how well a CV matches a role. A person reviews every application and makes every decision. &ldquo;Not stated&rdquo; means &ldquo;verify&rdquo;, never &ldquo;reject&rdquo;. Rankings are estimates based on the applicants so far.</p></footer>
+
+<script src="engine.js"></script>
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="cvtools.js"></script>
+<script src="jobs.js"></script>
+</body>
+</html>

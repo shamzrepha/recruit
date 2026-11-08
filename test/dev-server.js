@@ -56,6 +56,7 @@ function createServer() {
 
     // Rewrites
     if (pathname === '/hire') pathname = '/hire.html';
+    if (pathname === '/jobs') pathname = '/jobs.html';
     if (pathname === '/apply') pathname = '/apply.html';
     if (pathname === '/interview') pathname = '/interview.html';
     if (pathname === '/') pathname = '/index.html';

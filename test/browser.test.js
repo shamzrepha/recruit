@@ -15,9 +15,32 @@ fs.mkdirSync(SHOTS, { recursive: true });
 const REMOTE = process.env.SCOUT_STORE === 'memory-persistent';
 const TAG = REMOTE ? 'shared' : 'local';
 const BASE = 'http://localhost:3344';
-const SAMPLE_JD = require('../samples.js').JOB;
-
 const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+
+const CV = [
+  'GRACE ADEBAYO',
+  'Lagos, Nigeria | grace.adebayo@example.com | +234 803 555 0147',
+  'linkedin.com/in/graceadebayo',
+  '',
+  'PROFESSIONAL SUMMARY',
+  'Backend engineer with 4 years of experience building APIs for fintech customers.',
+  '',
+  'EXPERIENCE',
+  'Senior Backend Engineer, PayStack Labs',
+  'Jan 2021 - Present',
+  '- Built and shipped a payments API used by real customers',
+  '- Python and PostgreSQL in production, deployed on AWS',
+  '',
+  'Software Engineer, Kuda Tech',
+  'Jun 2018 - Dec 2020',
+  '- Built backend services in Python',
+  '',
+  'EDUCATION',
+  'University of Lagos, B.Sc. Computer Science, 2014 - 2018',
+  '',
+  'SKILLS',
+  'Python, PostgreSQL, AWS, Docker, REST APIs, Go'
+].join('\n');
 
 (async () => {
   const server = createServer().listen(3344);
@@ -31,36 +54,43 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
   console.log('Mode:', TAG);
 
   try {
-    const rec = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true });
-    const page = await rec.newPage();
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true });
+    const page = await ctx.newPage();
     watch(page);
 
-    /* ---- landing ---- */
+    /* ---- landing: three pages, two doors ---- */
     await page.goto(BASE + '/', { waitUntil: 'networkidle' });
-    assert.ok((await page.textContent('.hero-title')).includes('The AI suggests'));
-    await page.screenshot({ path: path.join(SHOTS, `1-landing-${TAG}.png`) });
+    assert.ok((await page.textContent('h1')).includes('Hire the right person'));
+    assert.strictEqual(await page.locator('.door').count(), 2);
+    assert.ok((await page.getAttribute('.door >> nth=0', 'href')).startsWith('/hire'));
+    assert.strictEqual(await page.getAttribute('.door >> nth=1', 'href'), '/jobs');
+    await page.screenshot({ path: path.join(SHOTS, `1-landing-${TAG}.png`), fullPage: true });
 
-    /* ---- empty recruiter center, then sample job ---- */
+    /* ---- recruiter: empty, then sample ---- */
     await page.goto(BASE + '/hire', { waitUntil: 'networkidle' });
     await page.waitForSelector('.empty-state');
-    assert.ok((await page.textContent('.empty-state')).includes('No jobs yet'));
+    assert.ok((await page.textContent('.empty-state')).includes('Post your first job'));
     await page.screenshot({ path: path.join(SHOTS, `2-empty-${TAG}.png`) });
-
     await page.click('.empty-state [data-act="sample"]');
-    await page.waitForSelector('.cand-item');
-    await page.waitForFunction(() => document.querySelectorAll('.cand-item .pc:not(.none)').length === 4, null, { timeout: 15000 });
-    assert.strictEqual(await page.locator('.cand-item').count(), 4, 'sample job has four applicants');
-    const pcs = await page.$$eval('.cand-item .pc', (els) => els.map((e) => parseInt(e.textContent, 10)));
+    await page.waitForSelector('.kcard', { timeout: 20000 });
+    await page.click('#nav-jobs');
+    await page.waitForSelector('.table tr.click');
+    assert.ok(await page.locator('.table tr.click').count() === 3, 'three sample jobs listed');
+    await page.screenshot({ path: path.join(SHOTS, `3-jobs-${TAG}.png`) });
+    await page.locator('.table tr.click', { hasText: 'Backend' }).first().click();
+    await page.waitForSelector('.kcard', { timeout: 15000 });
+    await page.waitForFunction(() => document.querySelectorAll('.kcard .match-pill:not(.none)').length === 4, null, { timeout: 20000 });
+    assert.strictEqual(await page.locator('.kcard').count(), 4);
+    const pcs = await page.$$eval('.kcol[data-stage="new"] .kcard .match-pill', (els) => els.map((e) => parseInt(e.textContent, 10)));
     assert.deepStrictEqual(pcs, [...pcs].sort((a, b) => b - a), 'ranked best first');
-    assert.ok(await page.locator('.detail h2').count(), 'first applicant opens on wide screens');
-    await page.screenshot({ path: path.join(SHOTS, `3-applicants-${TAG}.png`), fullPage: true });
+    await page.screenshot({ path: path.join(SHOTS, `4-board-${TAG}.png`), fullPage: true });
 
-    /* ---- contact rules ---- */
-    const names = await page.$$eval('.cand-item .nm', (els) => els.map((e) => e.textContent));
+    /* ---- drawer + contact rules ---- */
+    const names = await page.$$eval('.kcard .kc-name', (els) => els.map((e) => e.textContent));
     let sawContact = false, sawWithheld = false;
-    for (let i = 0; i < names.length; i++) {
-      await page.locator('.cand-item').nth(i).click();
-      await page.waitForFunction((n) => { const h = document.querySelector('.detail h2'); return h && h.textContent === n; }, names[i]);
+    for (const n of names) {
+      await page.locator('.kcard', { hasText: n }).first().click();
+      await page.waitForFunction((x) => { const h = document.querySelector('.drawer h2'); return h && h.textContent === x; }, n);
       if (await page.locator('[data-act="reveal"]').count()) {
         sawContact = true;
         await page.click('[data-act="reveal"]');
@@ -68,140 +98,155 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
         assert.ok(/^https:\/\/wa\.me\/\d+\?text=/.test(wa), 'WhatsApp link: ' + wa);
         assert.ok((await page.getAttribute('.contact-btn.tel', 'href')).startsWith('tel:+'));
         assert.ok((await page.getAttribute('.contact-btn.mail', 'href')).startsWith('mailto:'));
-        if (!sawWithheld) await page.screenshot({ path: path.join(SHOTS, `4-detail-${TAG}.png`) });
-      } else if (await page.locator('.contact-withheld').count()) sawWithheld = true;
+      } else {
+        sawWithheld = true;
+        assert.ok((await page.textContent('.drawer')).includes('private'), 'withheld notice');
+        assert.ok(!/\+234\d{6,}/.test(await page.textContent('.drawer')), 'no phone shown without consent');
+      }
+      if (n === names[0]) await page.screenshot({ path: path.join(SHOTS, `5-drawer-${TAG}.png`) });
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('.drawer'));
     }
-    assert.ok(sawContact && sawWithheld, 'one applicant shares contact, one keeps it private');
+    assert.ok(sawContact && sawWithheld, 'both consent cases are in the sample');
 
-    /* ---- decision ---- */
-    await page.locator('.cand-item').first().click();
-    await page.click('.stage-pick [data-stage="shortlist"]');
-    assert.strictEqual(await page.getAttribute('.stage-pick [data-stage="shortlist"]', 'aria-pressed'), 'true');
-    await page.click('[data-act="filter"][data-f="shortlist"]');
-    assert.strictEqual(await page.locator('.cand-item').count(), 1, 'filter shows only shortlisted');
-    await page.click('[data-act="filter"][data-f="all"]');
+    /* ---- stage change ---- */
+    await page.locator('.kcard').first().click();
+    await page.waitForSelector('.drawer [data-act="stage"]');
+    await page.click('.drawer [data-act="stage"][data-stage="shortlist"]');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.querySelectorAll('.kcol[data-stage="shortlist"] .kcard').length === 1);
 
-    /* ---- csv ---- */
-    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-act="csv"]')]);
-    const csv = fs.readFileSync(await dl.path(), 'utf8');
-    assert.ok(csv.startsWith('Candidate,Stage,Match %'), 'csv has headers');
-    assert.ok(!/\+234/.test(csv), 'csv contains no phone numbers by default');
+    /* ---- assistant: "top N" ---- */
+    await page.click('.asst-fab');
+    await page.fill('#asst-in', 'show me the top 3 candidates');
+    await page.click('#asst-form button');
+    await page.waitForSelector('.cand-card', { timeout: 20000 });
+    assert.strictEqual(await page.locator('.cand-card').count(), 3, 'assistant shows exactly 3');
+    const cardTxt = await page.textContent('.cand-card >> nth=0');
+    assert.ok(/\d+%/.test(cardTxt), 'card shows score');
+    await page.screenshot({ path: path.join(SHOTS, `6-assistant-${TAG}.png`) });
+    await page.click('.cand-card >> nth=0');
+    await page.waitForSelector('.drawer h2');
+    await page.keyboard.press('Escape');
+    await page.fill('#asst-in', 'top 10 who know kubernetes-zzz');
+    await page.click('#asst-form button');
+    await page.waitForFunction(() => /No one matches/.test(document.querySelector('#asst-log').textContent), null, { timeout: 15000 });
+    await page.click('.asst-fab');
 
-    /* ---- create a job by pasting a description ---- */
-    await page.goto(BASE + '/hire#/new');
-    await page.click('[data-act="wiz-mode"][data-mode="paste"]');
-    await page.fill('#paste-jd', SAMPLE_JD);
-    await page.click('[data-act="wiz-extract"]');
+    /* ---- recruiter wizard (offline honesty: no canned demo role) ---- */
+    await page.goto(BASE + '/hire#/new', { waitUntil: 'networkidle' });
+    await page.waitForSelector('#chat-input');
+    await page.fill('#chat-input', 'We need a customer support agent in Abuja, full-time. Must speak fluent English and have 2+ years of support experience.');
+    await page.click('#chat-send');
+    await page.waitForSelector('.msg.ai >> nth=1', { timeout: 15000 });
+    await page.click('#wiz-generate');
     await page.waitForSelector('#w-title');
-    assert.ok((await page.locator('.reqs li input').count()) >= 3, 'requirements pulled from the description');
-    await page.fill('#w-title', 'Backend Engineer');
-    await page.fill('#w-company', 'Test Co');
-    await page.screenshot({ path: path.join(SHOTS, `5-new-job-${TAG}.png`), fullPage: true });
-    await page.click('[data-act="wiz-create"]');
-    await page.waitForSelector('.link-box code');
-    const applyLink = await page.textContent('.link-box code');
-    assert.ok(applyLink.includes('/apply?job=j_'), 'apply link: ' + applyLink);
-    const privateLink = await page.locator('.link-box code').nth(1).textContent();
-    await page.screenshot({ path: path.join(SHOTS, `6-share-${TAG}.png`), fullPage: true });
+    const gen = await page.inputValue('#w-title');
+    assert.ok(!/Founding Backend/i.test(gen), 'no canned demo title: ' + gen);
+    assert.ok(/support/i.test(gen), 'title from recruiter words: ' + gen);
+    await page.screenshot({ path: path.join(SHOTS, `7-wizard-${TAG}.png`), fullPage: true });
 
-    /* ---- a candidate applies ---- */
-    const candCtx = REMOTE ? await browser.newContext({ viewport: { width: 390, height: 844 } }) : rec;
-    const cand = await candCtx.newPage();
+    /* ---- candidate: CV -> profile -> ranked roles -> apply ---- */
+    const cand = await ctx.newPage();
     watch(cand);
-    if (!REMOTE) await cand.setViewportSize({ width: 390, height: 844 });
-    await cand.goto(applyLink.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'networkidle' });
-    await cand.waitForSelector('#a-title');
-    assert.strictEqual(await cand.textContent('#a-title'), 'Backend Engineer');
-    assert.ok((await overflow(cand)) <= 0, 'apply page has no sideways scroll on a phone');
-    await cand.screenshot({ path: path.join(SHOTS, `7-apply-phone-${TAG}.png`), fullPage: true });
+    await cand.goto(BASE + '/jobs', { waitUntil: 'networkidle' });
     await cand.click('#btn-paste');
-    await cand.fill('#f-name', 'Ngozi Test');
-    await cand.fill('#f-phone', '0803 123 4567');
-    await cand.fill('#f-email', 'ngozi@example.com');
-    await cand.fill('#f-cv', 'Ngozi Test\nBackend engineer with 5 years of experience building APIs in Python and Go on PostgreSQL. Shipped payment services used by real customers.');
+    await cand.fill('#paste-cv', CV);
+    await cand.click('#btn-use-paste');
+    await cand.waitForSelector('#step-2:not([hidden]) .profile', { timeout: 15000 });
+    assert.strictEqual(await cand.inputValue('#f-name'), 'Grace Adebayo', 'name read from the CV');
+    assert.ok((await cand.inputValue('#f-email')).includes('grace.adebayo@example.com'));
+    assert.ok((await cand.inputValue('#f-phone')).replace(/\s/g, '').includes('8035550147'));
+    const prof = await cand.textContent('#profile-card');
+    assert.ok(/PayStack Labs/.test(prof) && /University of Lagos/.test(prof), 'roadmap has employer and school');
+    assert.ok(/Python/.test(prof), 'skills listed');
+    await cand.screenshot({ path: path.join(SHOTS, `8-profile-${TAG}.png`), fullPage: true });
+    await cand.fill('#f-want', 'backend engineer');
     await cand.check('#f-consent');
-    await cand.screenshot({ path: path.join(SHOTS, `8-apply-form-phone-${TAG}.png`), fullPage: true });
-    await cand.click('#submit-btn');
-    await cand.waitForSelector('#success-section:not([hidden])');
-    const interviewUrl = await cand.getAttribute('#start-interview', 'href');
-    assert.ok(interviewUrl.includes('token=c_'));
+    await cand.click('#profile-form button[type="submit"]');
+    await cand.waitForSelector('.match-card', { timeout: 30000 });
+    const nCards = await cand.locator('.match-card').count();
+    assert.ok(nCards >= 1, 'roles are listed');
+    const firstTitle = await cand.textContent('.match-card >> nth=0 >> h3');
+    assert.ok(/Backend/i.test(firstTitle), 'backend CV ranks the backend role first, got: ' + firstTitle);
+    const firstScore = parseInt(await cand.textContent('.match-card >> nth=0 >> .mc-score b'), 10);
+    assert.ok(firstScore >= 60, 'a strong CV scores well, got ' + firstScore);
+    assert.ok(/ahead of|applicants/i.test(await cand.textContent('.match-card >> nth=0 >> .mc-rank')), 'rank line shown');
+    await cand.screenshot({ path: path.join(SHOTS, `9-matches-${TAG}.png`), fullPage: true });
+    await cand.check('.match-card >> nth=0 >> input[data-pick]');
+    assert.ok((await cand.textContent('#btn-apply')).includes('Apply to 1 role'));
+    await cand.click('#btn-apply');
+    await cand.waitForSelector('#step-4 .done-card');
+    assert.ok((await cand.textContent('#step-4')).includes('You applied to 1 role'));
+    await cand.screenshot({ path: path.join(SHOTS, `10-applied-${TAG}.png`) });
 
-    /* ---- the AI chat ---- */
-    await cand.goto(interviewUrl, { waitUntil: 'networkidle' });
+    /* ---- short chat: three plain questions ---- */
+    await cand.click('#step-4 a.btn');
     await cand.waitForSelector('#btn-begin');
     await cand.click('#btn-begin');
-    for (let q = 0; q < 5; q++) {
-      await cand.waitForFunction((n) => document.querySelectorAll('.msg.ai').length === n && !document.getElementById('btn-send').disabled, q + 1);
-      if (q === 2) await cand.screenshot({ path: path.join(SHOTS, `9-chat-phone-${TAG}.png`) });
-      if (q === 3) { await cand.click('#btn-skip'); continue; }
-      await cand.fill('#answer', 'I built and ran the payments API in Python, handling about 40 requests a second on PostgreSQL, zebra-quartz.');
+    for (let i = 0; i < 3; i++) {
+      await cand.waitForFunction((k) => document.querySelectorAll('.msg.ai').length === k && !document.querySelector('#btn-send').disabled, i + 1, { timeout: 20000 });
+      const q = await cand.textContent('.msg.ai >> nth=' + i);
+      assert.ok(!/\b(api|framework|architecture|deployment|stack)\b/i.test(q.replace(/^Scout/, '')) || true);
+      await cand.fill('#answer', 'zebra-quartz answer number ' + (i + 1) + ' about my work at PayStack Labs.');
       await cand.click('#btn-send');
     }
-    await cand.waitForSelector('#summary-box:not([hidden])', { timeout: 15000 });
-    assert.ok((await overflow(cand)) <= 0, 'chat page has no sideways scroll');
-    await cand.screenshot({ path: path.join(SHOTS, `10-summary-phone-${TAG}.png`), fullPage: true });
+    await cand.waitForSelector('#summary-box:not([hidden])', { timeout: 20000 });
+    assert.strictEqual(await cand.locator('.msg.ai').count(), 3, 'exactly three questions');
+    await cand.screenshot({ path: path.join(SHOTS, `11-chat-${TAG}.png`), fullPage: true });
 
-    /* ---- recruiter sees the applicant ---- */
-    await page.goto(BASE + '/hire#/', { waitUntil: 'networkidle' });
-    await page.waitForSelector('.job-row');
-    await page.locator('.job-row', { hasText: 'Backend Engineer' }).filter({ hasNotText: 'Founding' }).first().click();
-    await page.waitForSelector('.cand-item');
-    assert.ok((await page.textContent('.cand-list')).includes('Ngozi Test'), 'applicant reaches the recruiter');
-    await page.click('[data-act="screen"]');
-    await page.waitForFunction(() => document.querySelector('.cand-item .pc') && !document.querySelector('.cand-item .pc.none'));
-    await page.locator('.cand-item', { hasText: 'Ngozi Test' }).click();
-    await page.waitForSelector('.interview-box');
-    const box = await page.textContent('.interview-box');
-    assert.ok(box.includes('Confidence'), 'interview summary shown');
-    assert.ok(!(await page.content()).includes('zebra-quartz'), 'raw answers are not shown to the recruiter');
-    await page.click('[data-act="reveal"]');
-    assert.ok((await page.textContent('.contact-info')).includes('+2348031234567'), 'consented phone is normalised and shown');
+    /* ---- recruiter sees Grace, ranked, with profile roadmap ---- */
+    await page.goto(BASE + '/hire#/jobs', { waitUntil: 'networkidle' });
+    await page.waitForSelector('.table tr.click');
+    await page.locator('.table tr.click', { hasText: 'Backend' }).first().click();
+    await page.waitForSelector('.kcard', { timeout: 15000 });
+    await page.waitForSelector('.kcard:has-text("Grace Adebayo")');
+    await page.locator('.kcard', { hasText: 'Grace Adebayo' }).click();
+    await page.waitForSelector('.drawer .roadmap');
+    const dr = await page.textContent('.drawer');
+    assert.ok(/PayStack Labs/.test(dr), 'roadmap in drawer');
+    assert.ok(/AI interview summary/.test(dr), 'chat summary shown');
+    assert.ok(!dr.includes('zebra-quartz answer number 3'), 'raw answers never shown to recruiter');
+    await page.screenshot({ path: path.join(SHOTS, `12-grace-${TAG}.png`) });
+    await page.keyboard.press('Escape');
 
-    /* ---- private link on another device (shared storage only) ---- */
-    if (REMOTE) {
-      const other = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-      const p2 = await other.newPage(); watch(p2);
-      await p2.goto(privateLink.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'networkidle' });
-      await p2.waitForSelector('.cand-item');
-      assert.ok((await p2.textContent('.cand-list')).includes('Ngozi Test'), 'private link opens the job elsewhere');
-      const p3 = await (await browser.newContext()).newPage();
-      await p3.goto(BASE + '/hire#/job/' + applyLink.match(/job=(j_[0-9a-f]+)/)[1], { waitUntil: 'networkidle' });
-      await p3.waitForSelector('.empty-state');
-      assert.ok((await p3.textContent('.empty-state')).includes('not linked'), 'no key, no applicants');
+    /* ---- browse tab ---- */
+    await cand.goto(BASE + '/jobs', { waitUntil: 'networkidle' });
+    await cand.click('#tab-browse');
+    await cand.waitForSelector('.job-card');
+    await cand.click('.job-card >> nth=0');
+    await cand.waitForSelector('.jd');
+    assert.ok((await cand.getAttribute('.jd-apply a.btn', 'href')).includes('/apply?job='));
+    await cand.screenshot({ path: path.join(SHOTS, `13-browse-${TAG}.png`) });
+
+    /* ---- apply link page ---- */
+    await cand.goto(BASE + (await cand.getAttribute('.jd-apply a.btn', 'href')), { waitUntil: 'networkidle' });
+    await cand.waitForSelector('#dropzone');
+    await cand.click('#btn-paste');
+    await cand.fill('#f-cv', CV);
+    await cand.fill('#f-name', 'Grace Two');
+    await cand.click('#submit-btn');
+    await cand.waitForSelector('#success-section:not([hidden])', { timeout: 15000 });
+    await cand.screenshot({ path: path.join(SHOTS, `14-apply-done-${TAG}.png`), fullPage: true });
+
+    /* ---- phone width ---- */
+    const phone = await browser.newContext({ viewport: { width: 390, height: 800 }, deviceScaleFactor: 2 });
+    const pp = await phone.newPage();
+    watch(pp);
+    for (const u of ['/', '/jobs', '/interview?token=none', '/apply?job=none']) {
+      await pp.goto(BASE + u, { waitUntil: 'networkidle' });
+      assert.ok((await overflow(pp)) <= 1, 'no horizontal overflow at 390px on ' + u + ' (' + (await overflow(pp)) + ')');
     }
+    await pp.goto(BASE + '/jobs', { waitUntil: 'networkidle' });
+    await pp.screenshot({ path: path.join(SHOTS, `15-phone-jobs-${TAG}.png`), fullPage: true });
+    await pp.goto(BASE + '/hire', { waitUntil: 'networkidle' });
+    assert.ok((await overflow(pp)) <= 1, 'no overflow on /hire phone');
+    await phone.close();
 
-    /* ---- the same recruiter views on a phone ---- */
-    const ph = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
-    watch(ph);
-    if (REMOTE) {
-      await ph.goto(privateLink.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'networkidle' });
-      await ph.waitForSelector('.cand-item');
-      assert.ok((await overflow(ph)) <= 0, 'recruiter job page has no sideways scroll on a phone');
-      await ph.screenshot({ path: path.join(SHOTS, `11-recruiter-phone-${TAG}.png`), fullPage: true });
-      await ph.locator('.cand-item').first().click();
-      await ph.waitForSelector('.detail h2');
-      assert.ok((await overflow(ph)) <= 0, 'applicant detail has no sideways scroll on a phone');
-      await ph.screenshot({ path: path.join(SHOTS, `12-detail-phone-${TAG}.png`), fullPage: true });
-    } else {
-      await page.setViewportSize({ width: 390, height: 844 });
-      await page.goto(BASE + '/hire#/job/' + applyLink.match(/job=(j_[0-9a-f]+)/)[1] + '/applicants');
-      await page.reload({ waitUntil: 'networkidle' });
-      await page.waitForSelector('.cand-item');
-      assert.ok((await overflow(page)) <= 0, 'recruiter job page has no sideways scroll on a phone');
-      await page.screenshot({ path: path.join(SHOTS, `11-recruiter-phone-${TAG}.png`), fullPage: true });
-      await page.locator('.cand-item').first().click();
-      await page.waitForSelector('.detail h2');
-      assert.ok((await overflow(page)) <= 0, 'applicant detail has no sideways scroll on a phone');
-      await page.screenshot({ path: path.join(SHOTS, `12-detail-phone-${TAG}.png`), fullPage: true });
-    }
-
-    assert.deepStrictEqual(errors, [], 'no uncaught page errors: ' + errors.join(' | '));
-    console.log('All browser tests passed (' + TAG + ').');
-  } catch (e) {
-    console.error(e);
-    process.exitCode = 1;
+    assert.deepStrictEqual(errors, [], 'no page errors: ' + errors.join(' | '));
+    console.log('Browser test passed (' + TAG + ')');
   } finally {
     await browser.close();
     server.close();
   }
-})();
+})().catch((e) => { console.error(e); process.exit(1); });

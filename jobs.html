@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Find work - Scout</title>
+  <meta name="description" content="Upload your CV once. AI builds your profile, ranks the open roles that fit you, and you apply to the ones you pick.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%232563eb'/%3E%3Crect x='6' y='7' width='16' height='3.5' rx='1.5' fill='%23fff'/%3E%3Crect x='6' y='12.25' width='16' height='3.5' rx='1.5' fill='%23fff' fill-opacity='.7'/%3E%3Crect x='6' y='17.5' width='10' height='3.5' rx='1.5' fill='%23fff' fill-opacity='.45'/%3E%3C/svg%3E">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></symbol>
+
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1v-8z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-board" viewBox="0 0 24 24"><rect x="3.5" y="4" width="5" height="16" rx="1.2"/><rect x="10" y="4" width="5" height="10" rx="1.2"/><rect x="16.5" y="4" width="4" height="13" rx="1.2"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9 6.8 19.7l1-5.9L3.5 9.7l5.9-.8L12 3.5z"/></symbol>
+</svg>
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="topbar-left">
+      <a class="brand" href="/" aria-label="Scout home">
+        <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#2563eb"/><rect x="6" y="7" width="16" height="3.5" rx="1.5" fill="#fff"/><rect x="6" y="12.25" width="16" height="3.5" rx="1.5" fill="#fff" fill-opacity=".7"/><rect x="6" y="17.5" width="10" height="3.5" rx="1.5" fill="#fff" fill-opacity=".45"/></svg>
+        <span class="brand-word">Scout</span>
+      </a>
+      <nav class="topnav" aria-label="Main">
+        <a href="/jobs" aria-current="page">Find work</a>
+        <a href="/hire">For employers</a>
+      </nav>
+    </div>
+    <div class="topbar-right">
+      <a class="btn sm" href="/hire#/new">Post a job</a>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <div class="page-title hub-title">
+    <div><p class="eyebrow">For job seekers</p><h1>Find work that fits your CV</h1>
+    <p class="sub">Upload your CV once. AI builds your profile, ranks the open roles that suit you, and shows where you would stand. You pick the roles and apply in one click.</p></div>
+    <div class="seg-toggle" role="group" aria-label="What would you like to do?">
+      <button type="button" id="tab-match" aria-pressed="true">Match me with my CV</button>
+      <button type="button" id="tab-browse" aria-pressed="false">Browse all roles</button>
+    </div>
+  </div>
+
+  <!-- MATCH FLOW -->
+  <section id="match-panel">
+    <ol id="stepper" class="stepper" aria-label="Steps">
+      <li class="current" aria-current="step">Upload CV</li><li>Your profile</li><li>Roles for you</li><li>Applied</li>
+    </ol>
+
+    <div id="apps-box" class="card pad" hidden style="margin-bottom:24px"></div>
+
+    <div id="step-1">
+      <div class="two-col">
+        <div>
+          <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Choose a CV file or drop it here">
+            <input type="file" id="cvfile" accept=".pdf,image/png,image/jpeg,image/webp" class="visually-hidden" tabindex="-1">
+            <div class="dz-ic"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg></div>
+            <div class="dz-title">Drop your CV here</div>
+            <p class="hint">PDF, or a photo or screenshot (PNG, JPG, WEBP). Up to 5 MB.</p>
+            <button type="button" class="btn" id="browse-btn">Choose a file</button>
+          </div>
+          <p id="upload-msg" class="field-msg error" role="alert"></p>
+          <div id="ocr-status" class="status-box" hidden role="status"><div class="spinner" aria-hidden="true"></div><p id="ocr-msg">Reading&hellip;</p></div>
+          <div id="vision-box" class="banner info" hidden style="margin-top:16px"><span><strong>Photo hard to read?</strong> A Groq vision model can read it instead. That sends the image to our server, and only if you agree.</span><button type="button" class="btn sm secondary" id="btn-vision">Use vision reader</button></div>
+          <p style="margin-top:16px"><button type="button" class="link-btn" id="btn-paste">No file? Paste your CV text instead</button></p>
+          <div id="paste-box" hidden class="stack" style="margin-top:16px"><label class="visually-hidden" for="paste-cv">Your CV text</label><textarea id="paste-cv" rows="10" maxlength="12000" placeholder="Paste your CV here"></textarea><div class="row"><button type="button" class="btn" id="btn-use-paste">Read my CV</button></div></div>
+        </div>
+        <aside class="side-note">
+          <h2>What happens next</h2>
+          <ol class="num-list">
+            <li><span><strong>Your CV is read.</strong> On your device first. Nothing is sent to a recruiter yet.</span></li>
+            <li><span><strong>AI builds your profile:</strong> name, school, jobs, skills, laid out as a roadmap. You check it.</span></li>
+            <li><span><strong>You see roles ranked for you</strong>, how well your CV matches each, and where you would stand among applicants.</span></li>
+            <li><span><strong>You choose</strong> which roles to apply to.</span></li>
+          </ol>
+          <p class="hint" style="margin-top:16px">Your phone and email are shared with a recruiter only if you tick the box.</p>
+        </aside>
+      </div>
+    </div>
+
+    <div id="step-2" hidden>
+      <div class="two-col wide-left">
+        <div id="profile-card" class="card pad"></div>
+        <form id="profile-form" class="card pad stack" novalidate>
+          <h2 class="card-h">Check your details</h2>
+          <p id="parse-note" class="hint"></p>
+          <div class="field"><label class="label" for="f-name">Full name</label><input type="text" id="f-name" maxlength="80" autocomplete="name" required></div>
+          <div class="form-grid">
+            <div class="field"><label class="label" for="f-email">Email</label><input type="email" id="f-email" maxlength="120" autocomplete="email"></div>
+            <div class="field"><label class="label" for="f-phone">Phone</label><input type="tel" id="f-phone" autocomplete="tel"><p id="phone-feedback" class="field-msg" aria-live="polite"></p></div>
+          </div>
+          <div class="field"><label class="label" for="f-location">Where are you based?</label><input type="text" id="f-location" maxlength="80" placeholder="e.g. Lagos, Nigeria"></div>
+          <div class="field"><label class="label" for="f-want">What are you looking for?</label><input type="text" id="f-want" maxlength="120" placeholder="e.g. customer support, data analysis, remote"><span class="hint">Optional. Roles that fit this are shown first.</span></div>
+          <label class="consent" for="f-consent"><input type="checkbox" id="f-consent"><span><strong>Let recruiters see my phone and email</strong> for roles I apply to.<br><span class="hint">Unticked: they see your CV and profile only, and your contact details are not stored.</span></span></label>
+          <p id="form-msg" class="field-msg error" role="alert"></p>
+          <div class="row"><button type="button" class="btn ghost" id="btn-restart"><svg class="ic" aria-hidden="true"><use href="#i-arrow-left"/></svg> Start over</button><button type="submit" class="btn lg">Find roles for me <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="step-3" hidden>
+      <div id="match-status" class="status-box" hidden role="status"><div class="spinner" aria-hidden="true"></div><p id="match-msg"></p></div>
+      <div id="match-results"></div>
+    </div>
+
+    <div id="step-4" hidden></div>
+  </section>
+
+  <!-- BROWSE -->
+  <section id="browse-panel" hidden>
+    <form id="search-form" class="search-bar" role="search">
+      <label class="search-field"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span class="visually-hidden">Job title or keyword</span><input id="q" type="search" placeholder="Job title or keyword" autocomplete="off"></label>
+      <label class="search-field"><svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg><span class="visually-hidden">Location</span><input id="loc" type="search" placeholder="City or &ldquo;Remote&rdquo;" autocomplete="off"></label>
+      <button type="submit" class="btn lg">Search</button>
+    </form>
+    <div class="board-bar"><div id="type-filters" class="filters" role="group" aria-label="Job type"></div><p id="count" class="muted small" role="status"></p></div>
+    <div id="split" class="board-split"></div>
+  </section>
+</main>
+
+<div id="apply-bar" class="apply-bar" hidden><div class="apply-bar-in"><span id="apply-count"></span><div class="row"><button type="button" class="btn ghost sm" id="btn-select-best">Select best matches</button><button type="button" class="btn lg" id="btn-apply">Apply</button></div></div></div>
+
+<footer class="footer"><p>Scout uses AI to suggest how well a CV matches a role. A person reviews every application and makes every decision. &ldquo;Not stated&rdquo; means &ldquo;verify&rdquo;, never &ldquo;reject&rdquo;. Rankings are estimates based on the applicants so far.</p></footer>
+
+<script src="engine.js"></script>
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="cvtools.js"></script>
+<script src="jobs.js"></script>
+</body>
+</html>

@@ -124,6 +124,34 @@
     return best === -1 ? -1 : lines[best].first;
   }
 
+  var MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+  var EDU_LINE = /universit|college|polytechnic|school|institute|academy|b\.?\s?sc|b\.?\s?eng|\bb\.?a\b|m\.?\s?sc|m\.?\s?eng|\bhnd\b|\bond\b|diploma|bachelor|master|ph\.?d|waec|ssce|degree|graduat|student/i;
+  var RANGE_RE = /(?:(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+)?((?:19|20)\d\d)\s*(?:-|\u2013|\u2014|to|until)\s*(?:(?:(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+)?((?:19|20)\d\d)|(present|current|now|date|ongoing))/gi;
+  // Total years of work shown by date ranges (education lines are skipped, overlaps are merged).
+  function experienceYears(raw, nowDate) {
+    var today = nowDate || new Date();
+    var spans = [];
+    String(raw || '').split(/\r?\n/).forEach(function (line) {
+      if (EDU_LINE.test(line)) return;
+      var m;
+      RANGE_RE.lastIndex = 0;
+      while ((m = RANGE_RE.exec(line))) {
+        var a = parseInt(m[2], 10) + (m[1] ? MONTHS[m[1].toLowerCase()] / 12 : 0);
+        var b = m[5] ? today.getFullYear() + today.getMonth() / 12 : parseInt(m[4], 10) + (m[3] ? MONTHS[m[3].toLowerCase()] / 12 : 0.5);
+        if (b > a && b - a < 45) spans.push([a, b]);
+      }
+    });
+    spans.sort(function (x, y) { return x[0] - y[0]; });
+    var total = 0, cur = null;
+    spans.forEach(function (sp) {
+      if (!cur) cur = sp.slice();
+      else if (sp[0] <= cur[1]) cur[1] = Math.max(cur[1], sp[1]);
+      else { total += cur[1] - cur[0]; cur = sp.slice(); }
+    });
+    if (cur) total += cur[1] - cur[0];
+    return Math.round(total * 10) / 10;
+  }
+
   function cvYears(raw) {
     var best = null, m;
     YEARS_RE.lastIndex = 0;
@@ -134,6 +162,11 @@
     if (!best) {
       var mm = /(\d+)\s*months?/i.exec(raw);
       if (mm) best = { years: Math.round(parseInt(mm[1], 10) / 12 * 10) / 10, pos: mm.index };
+    }
+    if (!best) {
+      var ey = experienceYears(raw);
+      if (ey > 0) best = { years: ey, pos: Math.max(0, raw.search(RANGE_RE)) };
+      RANGE_RE.lastIndex = 0;
     }
     return best;
   }
@@ -167,6 +200,12 @@
     var cy = yearsReq !== null ? cvYears(raw) : null;
 
     if (yearsReq !== null) {
+      if (!alts.length && cy) {
+        // A general "N+ years of experience" requirement: judge it from the years the CV shows.
+        return cy.years >= yearsReq
+          ? { status: 'met', evidence: snippet(raw, cy.pos), note: 'The CV shows about ' + cy.years + ' years of experience.' }
+          : { status: 'not_met', evidence: snippet(raw, cy.pos), note: 'The CV shows about ' + cy.years + ' year' + (cy.years === 1 ? '' : 's') + ' of experience; the role asks for ' + yearsReq + '+.' };
+      }
       if (cy && cy.years < yearsReq) {
         return {
           status: 'not_met',
@@ -501,7 +540,196 @@
     return out;
   }
 
+  /* ------------------------------------------------------------ CV profile (offline fallback) */
+
+  var HEADINGS = {
+    summary: /^(professional\s+)?(summary|profile|objective|about( me)?|personal statement)$/i,
+    education: /^(education(al)?( background| qualifications?)?|academic( background| qualifications?)?|qualifications?)$/i,
+    experience: /^((work|professional|relevant|employment)\s+)?(experience|history)|^employment|^career( history)?$/i,
+    skills: /^((key|core|technical|professional|soft)\s+)?(skills|competenc(y|ies)|technologies|tools)( & tools)?$/i,
+    certs: /^(certifications?|certificates?|training|courses?|licen[cs]es?)$/i,
+    languages: /^languages?$/i,
+    projects: /^(projects?|achievements?|awards?|volunteering|interests|references?|hobbies)$/i
+  };
+  var SCHOOL_RE = /(universit|college|polytechnic|institute|academy|school of|secondary school|high school)/i;
+  var QUAL_RE = /(b\.?\s?sc\.?|b\.?\s?eng\.?|b\.?\s?tech|\bb\.?a\.?\b|m\.?\s?sc\.?|m\.?\s?eng\.?|m\.?\s?b\.?\s?a|ph\.?d|\bhnd\b|\bond\b|bachelor[^,;|\n]*|master[^,;|\n]*|diploma[^,;|\n]*|waec|ssce|neco)/i;
+
+  function splitSections(raw) {
+    var lines = String(raw || '').split(/\r?\n/);
+    var out = { top: [] }, cur = 'top';
+    lines.forEach(function (l) {
+      var t = l.trim().replace(/[:\-–—_*#=]+$/g, '').replace(/^[#*\-–—\s]+/, '').trim();
+      var key = null;
+      if (t && t.length <= 40) {
+        Object.keys(HEADINGS).forEach(function (k) { if (!key && HEADINGS[k].test(t)) key = k; });
+      }
+      if (key) { cur = key; out[cur] = out[cur] || []; }
+      else (out[cur] = out[cur] || []).push(l);
+    });
+    return out;
+  }
+
+  function yearsIn(line) {
+    var ys = String(line).match(/(?:19|20)\d\d/g) || [];
+    return { start: ys[0] || '', end: /present|current|now|date|ongoing/i.test(line) ? 'Present' : (ys[1] || '') };
+  }
+
+  function parseCv(raw) {
+    raw = String(raw || '');
+    var c = extractContacts(raw);
+    if (c.name && c.name === c.name.toUpperCase()) c.name = c.name.toLowerCase().replace(/(^|[\s'-])([a-z])/g, function (m, p1, p2) { return p1 + p2.toUpperCase(); });
+    var sec = splitSections(raw);
+    var profile = {
+      name: c.name, headline: '', location: c.location, email: c.email, phone: c.phone,
+      links: c.links, summary: '', skills: [], yearsExperience: null,
+      education: [], experience: [], certifications: [], languages: [], suggestedRoles: []
+    };
+
+    if (sec.summary) profile.summary = sec.summary.join(' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+
+    var skillText = (sec.skills || []).join('\n');
+    profile.skills = skillText.split(/[,;|•·\n]|\s{2,}/).map(function (x) {
+      return x.replace(/^[\s\-–*•:]+|[\s.]+$/g, '').replace(/^(languages?|frameworks?|tools?|databases?|programming)\s*:\s*/i, '').trim();
+    }).filter(function (x) { return x.length > 1 && x.length <= 40; }).slice(0, 30);
+
+    (sec.certs || []).forEach(function (l) { var t = l.replace(/^[\s\-–*•]+/, '').trim(); if (t) profile.certifications.push(t.slice(0, 100)); });
+    profile.certifications = profile.certifications.slice(0, 10);
+    (sec.languages || []).join(',').split(/[,;|\n]/).forEach(function (l) { var t = l.replace(/^[\s\-–*•]+/, '').trim(); if (t && t.length < 30) profile.languages.push(t); });
+    profile.languages = profile.languages.slice(0, 8);
+
+    var edu = (sec.education || []).filter(function (l) { return l.trim(); });
+    edu.forEach(function (l) {
+      if (!SCHOOL_RE.test(l) && !QUAL_RE.test(l)) return;
+      var yrs = yearsIn(l);
+      var q = QUAL_RE.exec(l);
+      var school = (l.split(/[|–—•]| - /).filter(function (p) { return SCHOOL_RE.test(p); })[0] || '').replace(/(?:19|20)\d\d/g, '').replace(/[()]/g, '').trim();
+      if (QUAL_RE.test(school)) school = (l.split(/[|–—•,]| - /).filter(function (p) { return SCHOOL_RE.test(p) && !QUAL_RE.test(p); })[0] || school).replace(/(?:19|20)\d\d/g, '').trim();
+      var rest = l.replace(/(?:19|20)\d\d/g, '').replace(/\s*[-–—]\s*$/, '');
+      var fieldTxt = q ? rest.slice(q.index + q[0].length).replace(/^[\s,:\-–]+(in\s+)?/i, '').split(/[,|•(]/)[0].replace(/[()]/g, '').trim() : '';
+      if (SCHOOL_RE.test(fieldTxt)) fieldTxt = '';
+      profile.education.push({
+        school: (school || (SCHOOL_RE.test(rest) ? rest.trim() : '')).slice(0, 100),
+        qualification: q ? q[0].trim().slice(0, 100) : '',
+        field: fieldTxt.slice(0, 100), start: yrs.start, end: yrs.end
+      });
+    });
+    // merge a school line followed by a qualification line
+    for (var i = profile.education.length - 1; i > 0; i--) {
+      var a = profile.education[i - 1], b = profile.education[i];
+      if (a.school && !a.qualification && !b.school && b.qualification) { a.qualification = b.qualification; a.field = b.field; a.start = a.start || b.start; a.end = a.end || b.end; profile.education.splice(i, 1); }
+    }
+    profile.education = profile.education.slice(0, 6);
+
+    var ex = (sec.experience || []);
+    var cur = null, pend = [];
+    var SPLIT = /\s*(?:\||,| - | – | — | at | @ )\s*/;
+    function fromHeader(lines, yrs) {
+      var parts = lines.length > 1 ? [lines[0], lines[1]] : lines[0].split(SPLIT).filter(Boolean);
+      cur = { company: (parts[1] || '').slice(0, 100), title: (parts[0] || '').slice(0, 100), start: yrs ? yrs.start : '', end: yrs ? yrs.end : '', highlights: [] };
+      profile.experience.push(cur); pend = [];
+    }
+    ex.forEach(function (l) {
+      var t = l.trim();
+      if (!t) return;
+      RANGE_RE.lastIndex = 0;
+      var isBullet = /^[\s]*[-–*•·]/.test(l);
+      if (!isBullet && RANGE_RE.test(t) && !EDU_LINE.test(t)) {
+        RANGE_RE.lastIndex = 0;
+        var yrs = yearsIn(t);
+        var head = t.replace(RANGE_RE, ' ').replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (head.length > 2) { fromHeader(head.split(SPLIT).filter(Boolean).length > 1 ? [head] : [head], yrs); }
+        else if (pend.length) fromHeader(pend, yrs);
+        else if (cur && !cur.start) { cur.start = yrs.start; cur.end = yrs.end; }
+      } else if (isBullet) {
+        if (pend.length) fromHeader(pend, null);
+        if (cur && cur.highlights.length < 4) cur.highlights.push(t.replace(/^[-–*•·\s]+/, '').slice(0, 200));
+      } else if (t.length < 80 && !/[.!?]$/.test(t)) {
+        pend.push(t); if (pend.length > 2) pend.shift();
+      }
+    });
+    if (pend.length) fromHeader(pend, null);
+    profile.experience = profile.experience.slice(0, 10);
+
+    var ey = experienceYears(raw);
+    var explicit = cvYears(raw);
+    profile.yearsExperience = ey > 0 ? ey : (explicit ? explicit.years : null);
+    profile.headline = (profile.experience[0] && profile.experience[0].title) || (profile.education[0] && profile.education[0].qualification) || '';
+    return profile;
+  }
+
+  // The CV plus the profile fields, so keyword checks also see skills that were found.
+  function cvWithProfile(cv, profile) {
+    if (!profile) return cv || '';
+    var extra = [];
+    if (profile.skills && profile.skills.length) extra.push('Skills: ' + profile.skills.join(', '));
+    (profile.experience || []).forEach(function (e) { extra.push([e.title, e.company].filter(Boolean).join(' at ')); });
+    (profile.education || []).forEach(function (e) { extra.push([e.qualification, e.school].filter(Boolean).join(', ')); });
+    return String(cv || '') + (extra.length ? '\n\n' + extra.join('\n') : '');
+  }
+
+  // Where a score would land among a list of existing scores.
+  function percentile(score, scores) {
+    var list = (scores || []).filter(function (x) { return typeof x === 'number'; });
+    if (list.length < 3) return { enough: false, n: list.length };
+    var below = list.filter(function (x) { return x < score; }).length;
+    var ahead = Math.round(below / list.length * 100);
+    return { enough: true, n: list.length, ahead: ahead, top: Math.max(1, 100 - ahead) };
+  }
+
+  /* ------------------------------------------------------------ recruiter assistant (offline intent parser) */
+
+  var PLACES = ['lagos', 'abuja', 'port harcourt', 'ibadan', 'enugu', 'kano', 'owerri', 'benin city', 'kaduna', 'accra', 'nairobi', 'london', 'remote', 'nigeria'];
+  var FILLER = /^(the|a|an|me|them|us|candidates?|people|applicants?|who|that|can|could|please|and|or|also|for|to|of|any|all|some|with|in|have|has|know|knows|using|use|skills?|experience|skilled|good|at)$/i;
+
+  function parseIntent(message, jobs, currentJobId) {
+    var m = String(message || '').trim();
+    var low = m.toLowerCase();
+    var out = { action: 'top', n: 10, jobId: currentJobId || '', stage: '', skills: [], location: '', minScore: 0, interviewed: false, text: '' };
+    if (!m) return { action: 'help', text: '' };
+    if (/^(help|what can you do|how do you work|\?)/.test(low)) return { action: 'help', text: '' };
+
+    var num = /\b(?:top|best|first|strongest)\s+(\d{1,3})\b/.exec(low) || /\b(\d{1,3})\s+(?:best|top|strongest|candidates?|people|applicants?)\b/.exec(low);
+    if (num) out.n = Math.max(1, Math.min(100, parseInt(num[1], 10)));
+    else if (/\ball\b/.test(low)) out.n = 100;
+
+    if (/\bshortlist(ed)?\b/.test(low) && /\b(them|these|top|mark|add|move)\b/.test(low) && !/\b(show|list|who)\b/.test(low)) out.action = 'shortlist';
+    else if (/\bshortlisted\b/.test(low)) out.stage = 'shortlist';
+    else if (/\bpassed|rejected\b/.test(low)) out.stage = 'pass';
+    else if (/\bask first\b/.test(low)) out.stage = 'ask';
+    else if (/\b(new|unreviewed|not reviewed)\b/.test(low)) out.stage = 'new';
+    if (/\binterview(ed)?\b/.test(low)) out.interviewed = true;
+
+    var min = /\b(?:above|over|at least|more than|>=?)\s*(\d{2,3})\s*%?/.exec(low);
+    if (min) out.minScore = Math.min(100, parseInt(min[1], 10));
+
+    PLACES.forEach(function (pl) { if (!out.location && new RegExp('\\b' + pl + '\\b').test(low)) out.location = pl; });
+
+    var sk = /\b(?:know|knows|knowing|with|using|skilled in|skills? in|experience (?:in|with)|good at|familiar with|proficient in)\s+([a-z0-9#+.,/&\- ]+)/.exec(low);
+    if (sk) {
+      sk[1].split(/,|\band\b|\bor\b|\//).forEach(function (w) {
+        w = w.replace(/\b(in|at|from|for|who|that)\b.*$/, '').trim();
+        var words = w.split(/\s+/).filter(function (x) { return x && !FILLER.test(x); });
+        if (words.length && words.join(' ').length > 1) out.skills.push(words.join(' '));
+      });
+      out.skills = out.skills.filter(function (x) { return PLACES.indexOf(x) < 0 && !/^\d+$/.test(x); }).slice(0, 5);
+    }
+
+    var best = null, bestScore = 0;
+    (jobs || []).forEach(function (j) {
+      var toks = String(j.title || '').toLowerCase().split(/[^a-z0-9]+/).filter(function (t) { return t.length > 3; });
+      var hit = toks.filter(function (t) { return low.indexOf(t) >= 0; }).length;
+      if (hit > bestScore) { best = j; bestScore = hit; }
+    });
+    if (best) out.jobId = best.id;
+    return out;
+  }
+
   return {
+    parseCv: parseCv,
+    experienceYears: experienceYears,
+    cvWithProfile: cvWithProfile,
+    percentile: percentile,
+    parseIntent: parseIntent,
     checkRequirement: checkRequirement,
     demoScreen: demoScreen,
     score: score,

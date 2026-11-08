@@ -5,7 +5,7 @@
   var token = new URLSearchParams(location.search).get('token') || '';
   var candidate = null, job = null;
   var transcript = [];   // only real questions and answers; sent to the AI
-  var qIndex = 0, MAX = 5, finished = false;
+  var qIndex = 0, MAX = 3, finished = false;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -26,7 +26,7 @@
     }
     $('i-company').textContent = job.company || 'Open role';
     $('i-title').textContent = job.title;
-    $('i-sub').textContent = 'Hi ' + (candidate.name || 'there').split(/\s+/)[0] + '. This takes about five minutes.';
+    $('i-sub').textContent = 'Hi ' + (candidate.name || 'there').split(/\s+/)[0] + '. Three short questions, about two minutes.';
     $('flow').hidden = false;
     if (candidate.interview && candidate.interview.summary) {
       $('notice').hidden = true; $('begin-row').hidden = true;
@@ -39,7 +39,7 @@
   function addMsg(role, text) {
     var div = document.createElement('div');
     div.className = 'msg ' + (role === 'ai' ? 'ai' : 'me');
-    div.innerHTML = '<span class="who">' + (role === 'ai' ? 'AI interviewer' : 'You') + '</span>' + esc(text);
+    div.innerHTML = '<span class="who">' + (role === 'ai' ? 'Scout' : 'You') + '</span>' + esc(text);
     $('chat-log').appendChild(div);
     $('chat-log').scrollTop = $('chat-log').scrollHeight;
   }
@@ -67,7 +67,7 @@
       var data = await post('next_question', { role: job.title, requirements: reqs(), cv: candidate.cv, transcript: transcript, questionIndex: qIndex });
       q = data.question;
     } catch (err) { q = null; }
-    q = q || 'Tell me about a project from your CV that you are proud of, and what exactly you did on it.';
+    q = q || 'Tell me a little about your most recent job and what a normal week looked like.';
     $('typing').hidden = true; $('btn-send').disabled = false; $('btn-skip').disabled = false;
     addMsg('ai', q);
     transcript.push({ role: 'ai', text: q });
@@ -106,7 +106,7 @@
     } else {
       try { data = await post('summarize', { role: job.title, requirements: reqs(), cv: candidate.cv, transcript: transcript }); }
       catch (err) {
-        data = { summary: 'The candidate answered ' + answered.length + ' questions, but the AI summary could not be written. The recruiter can ask the same questions directly.', confirmedReqs: [], openReqs: [], followUpQuestions: [], confidence: 'low' };
+        data = { summary: 'The candidate answered ' + answered.length + ' question(s), but the summary could not be written. The recruiter can ask the same questions directly.', confirmedReqs: [], openReqs: [], followUpQuestions: [], confidence: 'low' };
       }
     }
     try {

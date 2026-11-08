@@ -1,11 +1,13 @@
 /*
- * Recruiting center: jobs, new-job wizard, and the per-job applicant pipeline.
+ * Employer dashboard: overview, jobs, post-a-job, and the per-job pipeline.
  * Hash routes:
- *   #/                              jobs list
- *   #/new                           new job wizard
- *   #/job/<id>[/applicants[/<cand>]]  applicants (default)
- *   #/job/<id>/requirements          edit the role
- *   #/job/<id>/share                 links and storage
+ *   #/                                dashboard
+ *   #/jobs                            all jobs
+ *   #/new                             post a job
+ *   #/job/<id>[/applicants[/<cand>]]  kanban pipeline (default); a candidate id opens the side panel
+ *   #/job/<id>/insights               pool insights
+ *   #/job/<id>/requirements           job details and requirements
+ *   #/job/<id>/share                  links, listing and storage
  * Opening #/job/<id>?key=<key> (the private recruiter link) adds the job to this browser.
  */
 (function () {
@@ -20,7 +22,7 @@
   var DEFAULT_TEMPLATE = "Hi {first name}, I'm {recruiter name} from {company}. I saw your CV for the {role} role and would like a quick chat. Are you free this week?";
 
   var app = { ai: false, mode: 'local' };
-  var ui = { filter: 'all', showAdd: false, revealed: {}, csvContacts: false, screening: '', notice: null, autoScreen: null };
+  var ui = { view: 'board', search: '', filter: 'all', showAdd: false, revealed: {}, csvContacts: false, screening: '', notice: null, autoScreen: null };
   var draft = newDraft();
   var edit = null;      // requirements tab form
   var cache = null;     // { id, job, key, cands, fetchedAt }
@@ -35,7 +37,7 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
   function uid() { return 'r_' + Date.now().toString(36) + (++seq); }
-  function newDraft() { return { step: 1, mode: 'chat', title: '', company: '', jd: '', reqs: [], chat: [], note: '', busy: false }; }
+  function newDraft() { return { step: 1, mode: 'chat', title: '', company: '', location: '', type: 'Full-time', workMode: 'On-site', listed: true, jd: '', reqs: [], chat: [], note: '', busy: false }; }
   function fmtDate(iso) {
     var d = new Date(iso);
     return isNaN(d) ? '' : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
@@ -74,6 +76,24 @@
     }
   }
 
+  var HUES = ['#2563eb', '#7c3aed', '#0d9488', '#db2777', '#ea580c', '#4f46e5', '#0891b2'];
+  function avatar(name, big) {
+    var n = (name || '?').trim(), h = 0;
+    for (var i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0;
+    return '<span class="logo' + (big ? ' lg' : '') + '" style="background:' + HUES[h % HUES.length] + '" aria-hidden="true">' + esc(n.charAt(0).toUpperCase()) + '</span>';
+  }
+  function initials(name) {
+    var p = String(name || '?').trim().split(/\s+/);
+    return ((p[0] || '?').charAt(0) + (p.length > 1 ? p[p.length - 1].charAt(0) : '')).toUpperCase();
+  }
+  function person(name) {
+    var n = String(name || '?'), h = 0;
+    for (var i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0;
+    return '<span class="avatar" style="background:' + HUES[h % HUES.length] + '" aria-hidden="true">' + esc(initials(name)) + '</span>';
+  }
+  function jobMeta(j) {
+    return [j.company, j.location, j.type, j.workMode].filter(Boolean).map(esc).join(' &middot; ');
+  }
   function icon(name) { return '<svg class="ic" aria-hidden="true"><use href="#i-' + name + '"/></svg>'; }
 
   function getOutreach() {
@@ -99,9 +119,10 @@
     .catch(function () { app.ai = false; paintStatus(); });
 
   function setNav(which) {
-    var jobs = $('nav-jobs'), nw = $('nav-new');
-    if (which === 'jobs') jobs.setAttribute('aria-current', 'page'); else jobs.removeAttribute('aria-current');
-    if (which === 'new') nw.setAttribute('aria-current', 'page'); else nw.removeAttribute('aria-current');
+    [['dash', 'nav-dash'], ['jobs', 'nav-jobs'], ['new', 'nav-new']].forEach(function (x) {
+      var n = $(x[1]);
+      if (which === x[0]) n.setAttribute('aria-current', 'page'); else n.removeAttribute('aria-current');
+    });
     var n = ScoutData.myJobs().length;
     $('nav-jobs-count').textContent = n ? n : '';
   }
@@ -125,7 +146,9 @@
     var base = p.slice(0, 3).join('/');
     var my = ++navId;
     try {
-      if (!p.length) { setNav('jobs'); await jobsView(my); }
+      if (p[0] !== 'job') { $('drawer-host').innerHTML = ''; document.body.classList.remove('drawer-open'); }
+      if (!p.length) { setNav('dash'); await dashboardView(my); }
+      else if (p[0] === 'jobs') { setNav('jobs'); await jobsListView(my); }
       else if (p[0] === 'new') { setNav('new'); newJobView(); }
       else if (p[0] === 'job' && p[1]) { setNav('jobs'); await jobView(my, p[1], p[2] || 'applicants', p[3] || null, r.q); }
       else location.hash = '#/';
@@ -142,62 +165,114 @@
       '<div class="row"><a class="btn" href="#/">Back to jobs</a></div></div>';
   }
 
-  /* ================================================================ JOBS LIST */
+  /* ================================================================ DASHBOARD + JOBS */
 
-  async function jobsView(my) {
-    cache = null; // opening a job from the list always fetches fresh applicants
+  async function loadPortfolio() {
     var mine = ScoutData.myJobs();
-    var head =
-      '<div class="view-head"><div><h1>Jobs</h1><p class="sub">Each job has its own apply link and its own applicants.</p></div>' +
-      '<div class="row"><button class="btn secondary" data-act="sample">Load a sample job</button>' +
-      '<a class="btn" href="#/new">' + icon('plus') + ' New job</a></div></div>';
-
-    if (!mine.length) {
-      view.innerHTML =
-        '<div class="view-head"><div><h1>Jobs</h1></div></div>' +
-        '<div class="empty-state"><h2>No jobs yet.</h2>' +
-        '<p>Create a job, share its apply link, and applicants show up here ranked against your requirements. Want to see it working first? Load a sample job with four made-up applicants.</p>' +
-        '<div class="row"><a class="btn lg" href="#/new">Create your first job</a><button class="btn secondary lg" data-act="sample">Load a sample job</button></div></div>';
-      return;
-    }
-
-    view.innerHTML = head + '<p class="muted">Loading your jobs&hellip;</p>';
-    var rows = await Promise.all(mine.map(async function (m) {
+    return Promise.all(mine.map(async function (m) {
       try {
         var j = (await call('jobGet', { id: m.id })).job;
         var cs = (await call('candidates', { jobId: m.id, key: m.key })).candidates;
         return { m: m, job: j, cands: cs };
       } catch (e) { return { m: m, error: e }; }
     }));
-    if (my !== navId) return;
+  }
 
-    var html = head +
-      '<div class="jobs-head eyebrow" aria-hidden="true"><span>Role</span><span>Applicants</span><span>To review</span><span>Status</span><span></span></div>' +
-      '<div class="jobs">' + rows.map(function (r) {
+  function emptyJobs() {
+    return '<div class="empty-state"><div class="empty-ic">' + icon('briefcase') + '</div><h2>Post your first job</h2>' +
+      '<p>Create a role, share its apply link, and applicants show up here in a pipeline, ranked against your requirements. Want to see it working first? Load sample jobs with made-up applicants.</p>' +
+      '<div class="row"><a class="btn lg" href="#/new">Post a job</a><button class="btn secondary lg" data-act="sample">Load sample jobs</button></div></div>';
+  }
+
+  async function dashboardView(my) {
+    cache = null;
+    if (!ScoutData.myJobs().length) {
+      view.innerHTML = '<div class="page-title"><h1>Dashboard</h1></div>' + emptyJobs();
+      return;
+    }
+    view.innerHTML = '<div class="page-title"><h1>Dashboard</h1></div><p class="muted">Loading&hellip;</p>';
+    var rows = await loadPortfolio();
+    if (my !== navId) return;
+    var ok = rows.filter(function (r) { return !r.error; });
+    var all = [];
+    ok.forEach(function (r) { r.cands.forEach(function (c) { all.push({ c: c, job: r.job }); }); });
+    var stats = [
+      ['Open jobs', ok.filter(function (r) { return r.job.status === 'open'; }).length, 'briefcase'],
+      ['Total applicants', all.length, 'users'],
+      ['To review', all.filter(function (x) { return x.c.stage === 'new'; }).length, 'clock'],
+      ['Shortlisted', all.filter(function (x) { return x.c.stage === 'shortlist'; }).length, 'star']
+    ];
+    all.sort(function (a, b) { return String(b.c.createdAt).localeCompare(String(a.c.createdAt)); });
+
+    var recent = all.slice(0, 6).map(function (x) {
+      var sc = x.c.screen ? Engine.score(x.job.requirements, x.c.screen.checks) : null;
+      return '<li><a class="list-row" href="#/job/' + esc(x.job.id) + '/applicants/' + esc(x.c.id) + '">' + person(x.c.name) +
+        '<span class="lr-main"><strong>' + esc(x.c.name) + '</strong><small>' + esc(x.job.title) + ' &middot; ' + esc(fmtDate(x.c.createdAt)) + '</small></span>' +
+        (sc ? '<span class="match-pill ' + (sc.now >= 70 ? 'hi' : sc.now >= 45 ? 'mid' : 'lo') + '">' + sc.now + '%</span>' : '<span class="muted small">Not screened</span>') + '</a></li>';
+    }).join('');
+
+    var jobsHtml = ok.slice(0, 5).map(function (r) {
+      var fresh = r.cands.filter(function (c) { return c.stage === 'new'; }).length;
+      return '<li><a class="list-row" href="#/job/' + esc(r.job.id) + '">' + avatar(r.job.company || r.job.title) +
+        '<span class="lr-main"><strong>' + esc(r.job.title) + '</strong><small>' + esc(r.job.location || r.job.workMode) + ' &middot; ' + plural(r.cands.length, 'applicant') + '</small></span>' +
+        (fresh ? '<span class="chip info">' + fresh + ' new</span>' : '') + '</a></li>';
+    }).join('');
+
+    view.innerHTML =
+      '<div class="page-title"><div><h1>Dashboard</h1><p class="sub">Your hiring at a glance.</p></div><a class="btn" href="#/new">' + icon('plus') + ' Post a job</a></div>' +
+      '<div class="stat-grid">' + stats.map(function (s2) {
+        return '<div class="stat"><span class="stat-ic">' + icon(s2[2]) + '</span><div><div class="stat-n">' + s2[1] + '</div><div class="stat-l">' + s2[0] + '</div></div></div>';
+      }).join('') + '</div>' +
+      '<div class="dash-grid">' +
+        '<section class="card"><div class="card-head"><h2>Recent applicants</h2></div>' + (recent ? '<ul class="list">' + recent + '</ul>' : '<p class="muted pad">No applicants yet. Share a job&rsquo;s apply link to get started.</p>') + '</section>' +
+        '<section class="card"><div class="card-head"><h2>Your jobs</h2><a href="#/jobs" class="small">View all</a></div><ul class="list">' + jobsHtml + '</ul></section>' +
+      '</div>';
+  }
+
+  async function jobsListView(my) {
+    cache = null;
+    var head = '<div class="page-title"><div><h1>Jobs</h1><p class="sub">Each job has its own apply link and its own pipeline.</p></div>' +
+      '<div class="row"><button class="btn secondary" data-act="sample">Load sample jobs</button><a class="btn" href="#/new">' + icon('plus') + ' Post a job</a></div></div>';
+    if (!ScoutData.myJobs().length) { view.innerHTML = '<div class="page-title"><h1>Jobs</h1></div>' + emptyJobs(); return; }
+    view.innerHTML = head + '<p class="muted">Loading&hellip;</p>';
+    var rows = await loadPortfolio();
+    if (my !== navId) return;
+    view.innerHTML = head + '<div class="card table-card"><div class="table-scroll"><table class="table"><thead><tr><th>Job</th><th>Status</th><th class="r">Applicants</th><th class="r">To review</th><th>Posted</th><th></th></tr></thead><tbody>' +
+      rows.map(function (r) {
         if (r.error) {
-          return '<div class="job-row"><div><div class="t">' + esc(r.m.title) + '</div><div class="c">Not available. It may have expired, or this browser cannot reach it.</div></div>' +
-            '<span></span><span></span><button class="btn ghost sm" data-act="forget" data-id="' + esc(r.m.id) + '">Remove</button><span></span></div>';
+          return '<tr><td><strong>' + esc(r.m.title) + '</strong><div class="muted small">Not available. It may have expired.</div></td><td></td><td></td><td></td><td></td><td class="r"><button class="btn ghost sm" data-act="forget" data-id="' + esc(r.m.id) + '">Remove</button></td></tr>';
         }
         var fresh = r.cands.filter(function (c) { return c.stage === 'new'; }).length;
-        return '<a class="job-row" href="#/job/' + esc(r.job.id) + '">' +
-          '<div><div class="t">' + esc(r.job.title) + '</div><div class="c">' + esc(r.job.company || 'No company set') + ' &middot; created ' + esc(fmtDate(r.job.createdAt)) + '</div></div>' +
-          '<div class="num">' + r.cands.length + '<small>applicants</small></div>' +
-          '<div class="num">' + fresh + '<small>to review</small></div>' +
-          '<div class="st"><span class="chip ' + (r.job.status === 'open' ? 'ok' : '') + '"><span class="dot"></span>' + (r.job.status === 'open' ? 'Open' : 'Closed') + '</span></div>' +
-          '<span class="arrow">' + icon('arrow-right') + '</span></a>';
-      }).join('') + '</div>';
-    view.innerHTML = html;
+        return '<tr class="click" data-href="#/job/' + esc(r.job.id) + '"><td><a class="t-main" href="#/job/' + esc(r.job.id) + '"><strong>' + esc(r.job.title) + '</strong></a><div class="muted small">' + jobMeta(r.job) + '</div></td>' +
+          '<td><span class="chip ' + (r.job.status === 'open' ? 'ok' : '') + '"><span class="dot"></span>' + (r.job.status === 'open' ? 'Open' : 'Closed') + '</span></td>' +
+          '<td class="r">' + r.cands.length + '</td><td class="r">' + (fresh ? '<span class="chip info">' + fresh + '</span>' : '0') + '</td><td>' + esc(fmtDate(r.job.createdAt)) + '</td><td class="r">' + icon('arrow-right') + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
   }
+
+  var SAMPLE_EXTRA = [
+    { title: 'Product Designer', company: 'Sample Startup', location: 'Remote (Africa)', type: 'Full-time', workMode: 'Remote',
+      jd: 'Design simple, clear product experiences for a fast-moving fintech team. You will own flows from research to shipped UI.',
+      reqs: [['3+ years designing web or mobile products', 'must'], ['Portfolio with shipped work', 'must'], ['Experience with Figma', 'must'], ['Experience in fintech', 'nice']] },
+    { title: 'Data Analyst Intern', company: 'Sample Startup', location: 'Lagos, Nigeria', type: 'Internship', workMode: 'Hybrid',
+      jd: 'Help the team turn product and customer data into clear weekly insights. Perfect for a final-year student or recent graduate.',
+      reqs: [['Comfortable with SQL', 'must'], ['Can build dashboards in Excel or a BI tool', 'must'], ['Knowledge of Python or R', 'nice']] }
+  ];
 
   async function makeSample(btn) {
     if (btn) btn.disabled = true;
-    toast('Creating a sample job&hellip;'.replace('&hellip;', '...'));
+    toast('Creating sample jobs...');
     var reqs = Engine.extractRequirements(Samples.JOB).map(function (r) { return { id: uid(), text: r.text, weight: r.weight }; });
-    var made = await call('jobCreate', { title: 'Founding Backend Engineer', company: 'Sample Startup', jd: Samples.JOB, requirements: reqs });
+    var made = await call('jobCreate', { title: 'Founding Backend Engineer', company: 'Sample Startup', location: 'Lagos, Nigeria', type: 'Full-time', workMode: 'Hybrid', jd: Samples.JOB, requirements: reqs });
     ScoutData.rememberJob(made.job, made.key);
     for (var i = 0; i < Samples.CANDIDATES.length; i++) {
       var c = Samples.CANDIDATES[i];
       await call('apply', { jobId: made.job.id, name: c.name, cv: c.cv, phone: c.phone, email: c.email, consent: c.consent, location: 'Lagos, Nigeria' });
+    }
+    for (var k = 0; k < SAMPLE_EXTRA.length; k++) {
+      var e = SAMPLE_EXTRA[k];
+      var m2 = await call('jobCreate', { title: e.title, company: e.company, location: e.location, type: e.type, workMode: e.workMode, jd: e.jd,
+        requirements: e.reqs.map(function (r) { return { id: uid(), text: r[0], weight: r[1] }; }) });
+      ScoutData.rememberJob(m2.job, m2.key);
     }
     ui.autoScreen = made.job.id;
     cache = null;
@@ -211,7 +286,7 @@
     var steps = '<ol class="steps" aria-label="Steps">' +
       '<li class="' + (d.step === 1 ? 'current' : 'done') + '">Describe the role</li><li class="sep" aria-hidden="true" style="width:32px;height:1px;background:var(--line-strong)"></li>' +
       '<li class="' + (d.step === 2 ? 'current' : '') + '">Review and create</li></ol>';
-    var head = '<div class="view-head"><div><a class="crumb" href="#/">' + icon('arrow-left') + ' Jobs</a><h1>New job</h1></div></div>';
+    var head = '<div class="page-title"><div><a class="crumb" href="#/jobs">' + icon('arrow-left') + ' Jobs</a><h1>Post a job</h1></div></div>';
 
     if (d.step === 1) {
       view.innerHTML = head + steps +
@@ -239,6 +314,7 @@
             '<input id="w-title" type="text" maxlength="100" data-field="draft.title" value="' + esc(d.title) + '" placeholder="e.g. Founding Backend Engineer"></div>' +
           '<div class="field"><label class="label" for="w-company">Company</label>' +
             '<input id="w-company" type="text" maxlength="80" data-field="draft.company" value="' + esc(d.company) + '" placeholder="Shown to candidates"></div></div>' +
+          jobFields('draft', d) +
           '<div><h2 style="font-size:1.05rem">Requirements</h2><p class="hint" style="margin:4px 0 12px">Click a label to switch between Must have and Nice to have.</p>' +
             reqEditor('draft', d.reqs) + '</div>' +
           '<details><summary class="link-btn" style="cursor:pointer">Job description (optional)</summary>' +
@@ -315,9 +391,12 @@
     try {
       var data = await postJson('/api/role-intake?action=generate', { messages: draft.chat });
       draft.title = data.title || draft.title;
-      draft.jd = data.jd || said;
+      draft.location = data.location || draft.location;
+      if (data.type && TYPES.indexOf(data.type) >= 0) draft.type = data.type;
+      if (data.workMode && MODES.indexOf(data.workMode) >= 0) draft.workMode = data.workMode;
+      draft.jd = data.summary ? data.summary + '\n\n' + (data.jd || '') : (data.jd || said);
       draft.reqs = (data.requirements || []).map(function (r) { return { id: uid(), text: r.text, weight: r.weight === 'nice' ? 'nice' : 'must' }; });
-      draft.note = data.demo ? 'The AI is not connected, so these are sample requirements. Edit them to fit your role.' : '';
+      draft.note = data.ai === false ? 'The AI is not connected, so these were pulled from what you wrote. Check and edit them.' : '';
     } catch (err) {
       draft.jd = said;
       draft.reqs = Engine.extractRequirements(said).map(function (r) { return { id: uid(), text: r.text, weight: r.weight }; });
@@ -345,7 +424,7 @@
     if (!reqs.length) { msg.textContent = 'Add at least one requirement.'; return; }
     msg.textContent = '';
     try {
-      var made = await call('jobCreate', { title: draft.title, company: draft.company, jd: draft.jd, requirements: reqs });
+      var made = await call('jobCreate', { title: draft.title, company: draft.company, location: draft.location, type: draft.type, workMode: draft.workMode, listed: draft.listed, jd: draft.jd, requirements: reqs });
       ScoutData.rememberJob(made.job, made.key);
       draft = newDraft();
       cache = null;
@@ -355,6 +434,15 @@
   }
 
   /* ---- requirements editor (used by the wizard and the Requirements tab) ---- */
+
+  var TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship'];
+  var MODES = ['On-site', 'Hybrid', 'Remote'];
+  function opts(list, cur) { return list.map(function (o) { return '<option' + (o === cur ? ' selected' : '') + '>' + o + '</option>'; }).join(''); }
+  function jobFields(ns, d) {
+    return '<div class="form-grid three"><div class="field"><label class="label" for="' + ns + '-loc">Location</label><input id="' + ns + '-loc" type="text" maxlength="80" data-field="' + ns + '.location" value="' + esc(d.location) + '" placeholder="e.g. Lagos, Nigeria"></div>' +
+      '<div class="field"><label class="label" for="' + ns + '-type">Job type</label><select id="' + ns + '-type" data-field="' + ns + '.type">' + opts(TYPES, d.type) + '</select></div>' +
+      '<div class="field"><label class="label" for="' + ns + '-mode">Work mode</label><select id="' + ns + '-mode" data-field="' + ns + '.workMode">' + opts(MODES, d.workMode) + '</select></div></div>';
+  }
 
   function listFor(name) { return name === 'draft' ? draft.reqs : (edit ? edit.reqs : []); }
 
@@ -407,10 +495,14 @@
       cache = data;
       if (q && q.key && !data.locked) history.replaceState(null, '', '#/job/' + id + (tab !== 'applicants' ? '/' + tab : ''));
       edit = null;
-      ui.filter = 'all'; ui.showAdd = false; ui.notice = null;
+      ui.filter = 'all'; ui.search = ''; ui.showAdd = false; ui.notice = null;
     }
     if (cache.locked) { lockedView(); return; }
-    if (tab === 'requirements' && !edit) edit = { title: cache.job.title, company: cache.job.company, jd: cache.job.jd, status: cache.job.status, reqs: cache.job.requirements.map(function (r) { return { id: r.id, text: r.text, weight: r.weight }; }) };
+    if (tab === 'requirements' && !edit) {
+      var jb = cache.job;
+      edit = { title: jb.title, company: jb.company, location: jb.location, type: jb.type, workMode: jb.workMode, jd: jb.jd, status: jb.status,
+        reqs: jb.requirements.map(function (r) { return { id: r.id, text: r.text, weight: r.weight }; }) };
+    }
     if (tab !== 'requirements') edit = null;
     renderJob(tab, candId);
 
@@ -423,38 +515,55 @@
 
   function lockedView() {
     var j = cache.job;
+    $('drawer-host').innerHTML = '';
     view.innerHTML =
-      '<div class="empty-state"><h2>' + esc(j.title) + '</h2>' +
+      '<div class="empty-state"><div class="empty-ic">' + icon('lock') + '</div><h2>' + esc(j.title) + '</h2>' +
       '<p>' + (cache.badKey ? 'That recruiter link does not match this job. ' : '') + 'This job is not linked to this browser. Open the private recruiter link that was shown when you created it to manage the job here.</p>' +
-      '<div class="row"><a class="btn" href="#/">Back to jobs</a></div></div>';
+      '<div class="row"><a class="btn" href="#/jobs">Back to jobs</a></div></div>';
   }
 
   function jobHead(tab) {
     var j = cache.job, n = cache.cands.length;
     var base = '#/job/' + j.id;
-    return '<a class="crumb" href="#/">' + icon('arrow-left') + ' Jobs</a>' +
-      '<div class="view-head"><div><h1>' + esc(j.title) + '</h1>' +
-      '<p class="sub">' + esc(j.company || 'No company set') + ' &middot; <span class="chip ' + (j.status === 'open' ? 'ok' : '') + '"><span class="dot"></span>' + (j.status === 'open' ? 'Open' : 'Closed') + '</span></p></div>' +
-      '<div class="row"><button class="btn secondary" data-act="copy-apply">' + icon('link') + ' Copy apply link</button></div></div>' +
+    var t = function (name, label, extra) {
+      return '<a href="' + base + '/' + name + '"' + (tab === name ? ' aria-current="page"' : '') + '>' + label + (extra || '') + '</a>';
+    };
+    return '<a class="crumb" href="#/jobs">' + icon('arrow-left') + ' Jobs</a>' +
+      '<div class="job-head">' + avatar(j.company || j.title, true) +
+      '<div class="jh-main"><h1>' + esc(j.title) + '</h1><p class="sub">' + jobMeta(j) + '</p></div>' +
+      '<div class="row jh-actions"><span class="chip ' + (j.status === 'open' ? 'ok' : '') + '"><span class="dot"></span>' + (j.status === 'open' ? 'Open' : 'Closed') + '</span>' +
+      '<button class="btn secondary" data-act="copy-apply">' + icon('link') + ' Copy apply link</button></div></div>' +
       '<nav class="tabs-line" aria-label="Job sections">' +
-      '<a href="' + base + '/applicants"' + (tab === 'applicants' ? ' aria-current="page"' : '') + '>Applicants<span class="count">' + n + '</span></a>' +
-      '<a href="' + base + '/requirements"' + (tab === 'requirements' ? ' aria-current="page"' : '') + '>Requirements</a>' +
-      '<a href="' + base + '/share"' + (tab === 'share' ? ' aria-current="page"' : '') + '>Share</a></nav>';
+      t('applicants', 'Pipeline', '<span class="count">' + n + '</span>') + t('insights', 'Insights') + t('requirements', 'Job details') + t('share', 'Share') + '</nav>';
   }
 
   var focusSel = null;
   function renderJob(tab, candId) {
-    var html = jobHead(tab);
+    var html = jobHead(tab), drawer = '';
     if (tab === 'requirements') html += requirementsTab();
     else if (tab === 'share') html += shareTab();
-    else html += applicantsTab(candId);
+    else if (tab === 'insights') html += insightsTab();
+    else {
+      html += pipelineTab();
+      if (candId) {
+        var sel = rowsFor().filter(function (r) { return r.c.id === candId; })[0];
+        if (sel) drawer = drawerHtml(sel);
+      }
+    }
     view.innerHTML = html;
-    if (focusSel) { var n = view.querySelector(focusSel); if (n) n.focus(); focusSel = null; }
+    var host = $('drawer-host');
+    var wasOpen = Boolean(host.firstChild);
+    host.innerHTML = drawer;
+    document.body.classList.toggle('drawer-open', Boolean(drawer));
+    if (drawer && !wasOpen) { var cb = host.querySelector('.drawer-close'); if (cb) cb.focus(); }
+    if (focusSel) { var n = document.querySelector(focusSel); if (n) n.focus(); focusSel = null; }
   }
   function rerender() {
     var r = parseHash();
+    if (r.parts[0] !== 'job' || !cache || r.parts[1] !== cache.id) return;
     renderJob(r.parts[2] || 'applicants', r.parts[3] || null);
   }
+  function closeDrawer() { if (cache) location.hash = '#/job/' + cache.id + '/applicants'; }
 
   /* ---- scoring helpers ---- */
 
@@ -487,10 +596,22 @@
     }).join('');
     return '<div class="bar" role="img" aria-label="' + esc(label) + '">' + segs + '</div>';
   }
+  function pill(sc) {
+    return sc ? '<span class="match-pill ' + (sc.now >= 70 ? 'hi' : sc.now >= 45 ? 'mid' : 'lo') + '">' + sc.now + '%</span>' : '<span class="match-pill none">Not screened</span>';
+  }
+  function candHref(c) { return '#/job/' + esc(cache.job.id) + '/applicants/' + esc(c.id); }
+  function flags(r) {
+    var c = r.c, m = '';
+    if (c.source === 'manual') m += '<span class="chip">Added by you</span>';
+    if (c.interview) m += '<span class="chip info">Interviewed</span>';
+    if (c.contactedAt) m += '<span class="chip">Contacted</span>';
+    if (r.stale) m += '<span class="chip warn">Out of date</span>';
+    return m;
+  }
 
-  /* ---- applicants tab ---- */
+  /* ---- pipeline tab ---- */
 
-  function applicantsTab(candId) {
+  function pipelineTab() {
     var j = cache.job, reqs = j.requirements;
     var rows = rowsFor();
     var need = needsScreen();
@@ -498,15 +619,14 @@
 
     if (!rows.length && !ui.showAdd) {
       var link = ScoutData.applyLink(j);
-      return '<div class="empty-state"><h2>No applicants yet.</h2>' +
-        '<p>Send candidates this role&rsquo;s apply link. They upload a CV, confirm their details, and appear here ranked against your requirements.</p>' +
+      return '<div class="empty-state"><div class="empty-ic">' + icon('users') + '</div><h2>No applicants yet</h2>' +
+        '<p>Send candidates this role&rsquo;s apply link' + (j.listed ? ', or they can find it on the public job board' : '') + '. They upload a CV, confirm their details, and appear here ranked against your requirements.</p>' +
         '<div class="link-box"><code>' + esc(link) + '</code><button class="btn sm" data-act="copy-apply">' + icon('copy') + ' Copy</button></div>' +
         (app.mode === 'local' ? '<div class="banner info" style="margin-top:16px"><span><strong>Heads up:</strong> this site is saving to this browser only, so applications must be made in this same browser. See Share to turn on shared storage.</span></div>' : '') +
         '<div class="row"><button class="btn secondary" data-act="toggle-add">Add a CV manually</button>' +
         '<a class="btn ghost" href="' + esc(link) + '" target="_blank" rel="noopener">Preview as a candidate</a></div></div>';
     }
 
-    // banners
     if (ui.screening) out += '<div class="banner info" role="status" style="margin-bottom:16px"><span><strong>Screening&hellip;</strong> ' + esc(ui.screening) + '</span></div>';
     else if (need.length) {
       var anyStale = need.some(function (c) { return c.screen; });
@@ -515,66 +635,85 @@
     }
     if (ui.notice) out += '<div class="banner bad" role="status" style="margin-bottom:16px"><span>' + esc(ui.notice) + '</span></div>';
 
-    // toolbar
-    var counts = { all: rows.length, new: 0, shortlist: 0, ask: 0, pass: 0 };
-    rows.forEach(function (r) { counts[r.c.stage] = (counts[r.c.stage] || 0) + 1; });
-    var filters = ['all', 'new', 'shortlist', 'ask', 'pass'].map(function (f) {
-      return '<button type="button" data-act="filter" data-f="' + f + '" aria-pressed="' + (ui.filter === f) + '">' + (f === 'all' ? 'All' : STAGE_LABEL[f]) + '<span class="n">' + (counts[f] || 0) + '</span></button>';
-    }).join('');
-    out += '<div class="toolbar"><div class="filters" role="group" aria-label="Filter applicants">' + filters + '</div>' +
+    out += '<div class="toolbar"><div class="row">' +
+      '<label class="search-mini"><span class="visually-hidden">Search applicants</span>' + icon('search') + '<input type="search" id="cand-search" data-field="ui.search" placeholder="Search applicants" value="' + esc(ui.search) + '"></label>' +
+      '<div class="seg-toggle" role="group" aria-label="View"><button type="button" data-act="view" data-v="board" aria-pressed="' + (ui.view === 'board') + '">' + icon('board') + ' Board</button><button type="button" data-act="view" data-v="list" aria-pressed="' + (ui.view === 'list') + '">' + icon('list') + ' List</button></div></div>' +
       '<div class="row"><button class="btn secondary sm" data-act="toggle-add">' + icon('plus') + ' Add a CV</button>' +
       '<button class="btn secondary sm" data-act="refresh">Refresh</button>' +
       '<button class="btn secondary sm" data-act="csv">' + icon('download') + ' CSV</button></div></div>';
 
     if (ui.showAdd) {
-      out += '<form class="stack" data-form="add-cv" style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--line)">' +
+      out += '<form class="card pad stack" data-form="add-cv" style="margin-bottom:20px">' +
         '<div class="field"><label class="label" for="add-name">Name</label><input id="add-name" type="text" maxlength="80" placeholder="Candidate name"></div>' +
         '<div class="field"><label class="label" for="add-cv">CV text</label><textarea id="add-cv" rows="6" maxlength="12000" placeholder="Paste the CV as plain text" required></textarea></div>' +
         '<div class="row"><button type="submit" class="btn">Add candidate</button><button type="button" class="btn ghost" data-act="toggle-add">Cancel</button></div></form>';
     }
 
-    var shown = rows.filter(function (r) { return ui.filter === 'all' || r.c.stage === ui.filter; });
-    var sel = null;
-    if (candId) sel = rows.filter(function (r) { return r.c.id === candId; })[0] || null;
-    if (!sel && !candId && isWide()) sel = shown[0] || null;
+    var qs = ui.search.trim().toLowerCase();
+    var shown = rows.filter(function (r) { return !qs || r.c.name.toLowerCase().indexOf(qs) >= 0; });
 
-    var list = shown.length ? '<ol class="cand-list" aria-label="Applicants, best match first">' + shown.map(function (r, i) {
-      var c = r.c;
-      var meta = '';
-      if (c.stage !== 'new') meta += '<span class="chip ' + (c.stage === 'shortlist' ? 'ok' : c.stage === 'ask' ? 'warn' : '') + '">' + STAGE_LABEL[c.stage] + '</span>';
-      if (c.source === 'manual') meta += '<span class="chip">Added by you</span>';
-      if (c.interview) meta += '<span class="chip info">Interviewed</span>';
-      if (c.contactedAt) meta += '<span class="chip">Contacted</span>';
-      if (r.stale) meta += '<span class="chip warn">Out of date</span>';
-      var label = r.sc ? r.sc.now + ' percent match' : 'Not screened yet';
-      return '<li><a class="cand-item" href="#/job/' + esc(j.id) + '/applicants/' + esc(c.id) + '"' + (sel && sel.c.id === c.id ? ' aria-current="true"' : '') + '>' +
-        '<span class="rk">' + (r.sc ? i + 1 : '&ndash;') + '</span><span class="nm">' + esc(c.name) + '</span>' +
-        (r.sc ? '<span class="pc">' + r.sc.now + '%</span>' : '<span class="pc none">Not screened</span>') +
-        (meta ? '<span class="meta">' + meta + '</span>' : '') +
-        barHtml(reqs, r.sc ? c.screen.checks : null, label) + '</a></li>';
-    }).join('') + '</ol>' : '<p class="muted" style="padding:24px 0">No applicants in this stage.</p>';
+    if (ui.view === 'list') {
+      out += '<div class="card table-card"><div class="table-scroll"><table class="table"><thead><tr><th>Candidate</th><th>Match</th><th>Stage</th><th>Applied</th><th>Notes</th></tr></thead><tbody>' +
+        (shown.length ? shown.map(function (r) {
+          var c = r.c;
+          return '<tr class="click" data-href="' + candHref(c) + '"><td><a class="t-main person-cell" href="' + candHref(c) + '">' + person(c.name) + '<strong>' + esc(c.name) + '</strong></a></td>' +
+            '<td><div class="match-cell">' + pill(r.sc) + (r.sc ? barHtml(reqs, c.screen.checks, r.sc.now + ' percent match') : '') + '</div></td>' +
+            '<td><span class="chip stage-' + c.stage + '">' + STAGE_LABEL[c.stage] + '</span></td><td>' + esc(fmtDate(c.createdAt)) + '</td><td><div class="chips">' + flags(r) + '</div></td></tr>';
+        }).join('') : '<tr><td colspan="5" class="muted pad">No applicants match.</td></tr>') + '</tbody></table></div></div>';
+    } else {
+      out += '<div class="kanban">' + ['new', 'shortlist', 'ask', 'pass'].map(function (st) {
+        var col = shown.filter(function (r) { return r.c.stage === st; });
+        return '<section class="kcol" data-stage="' + st + '" aria-label="' + STAGE_LABEL[st] + '"><header class="kcol-head"><h3><span class="kdot ' + st + '"></span>' + STAGE_LABEL[st] + '</h3><span class="kcount">' + col.length + '</span></header>' +
+          '<div class="kcol-body">' + (col.length ? col.map(function (r) {
+            var c = r.c;
+            return '<a class="kcard" draggable="true" data-cand="' + esc(c.id) + '" href="' + candHref(c) + '"' + (candIdNow() === c.id ? ' aria-current="true"' : '') + '>' +
+              '<div class="kc-top">' + person(c.name) + '<span class="kc-name">' + esc(c.name) + '</span>' + pill(r.sc) + '</div>' +
+              barHtml(reqs, r.sc ? c.screen.checks : null, r.sc ? r.sc.now + ' percent match' : 'Not screened yet') +
+              (flags(r) ? '<div class="chips">' + flags(r) + '</div>' : '') + '</a>';
+          }).join('') : '<p class="kempty">' + (st === 'new' ? 'New applicants appear here' : 'Drag candidates here') + '</p>') + '</div></section>';
+      }).join('') + '</div>';
+    }
 
-    var legend = '<ul class="legend" aria-label="How to read a match bar" style="margin-top:16px"><li><span class="seg s-met"></span> Stated</li><li><span class="seg s-not_stated"></span> Not stated, verify</li><li><span class="seg s-not_met"></span> CV says otherwise</li></ul>';
+    out += '<ul class="legend" aria-label="How to read a match bar" style="margin-top:20px"><li><span class="seg s-met"></span> Stated</li><li><span class="seg s-not_stated"></span> Not stated, verify</li><li><span class="seg s-not_met"></span> CV says otherwise</li></ul>';
+    return out;
+  }
+  function candIdNow() { return parseHash().parts[3] || ''; }
 
-    out += '<div class="split' + (candId && sel ? ' has-selection' : '') + '"><div class="cand-col">' + list + legend + '</div>' +
-      '<div class="detail-col">' + (sel ? detailPane(sel) : '<div class="detail"><div class="detail-empty"><div class="display">Pick an applicant</div><p>Select a name to see the evidence, contact options and your decision.</p></div></div>') + '</div></div>';
+  /* ---- insights tab ---- */
 
-    // coverage
+  function insightsTab() {
+    var j = cache.job, reqs = j.requirements, rows = rowsFor();
+    if (!rows.length) return '<div class="empty-state"><div class="empty-ic">' + icon('chart') + '</div><h2>Nothing to show yet</h2><p>Insights appear once you have applicants.</p></div>';
+    var by = { new: 0, shortlist: 0, ask: 0, pass: 0 };
+    rows.forEach(function (r) { by[r.c.stage]++; });
     var screened = rows.filter(function (r) { return r.sc && !r.stale; });
+    var max = Math.max(1, rows.length);
+    var out = '<div class="stat-grid">' + [['Applicants', rows.length, 'users'], ['Screened', screened.length, 'check'], ['Shortlisted', by.shortlist, 'star'], ['Interviewed by AI', rows.filter(function (r) { return r.c.interview; }).length, 'message']].map(function (x) {
+      return '<div class="stat"><span class="stat-ic">' + icon(x[2]) + '</span><div><div class="stat-n">' + x[1] + '</div><div class="stat-l">' + x[0] + '</div></div></div>';
+    }).join('') + '</div>';
+    out += '<div class="dash-grid"><section class="card pad"><h2 class="card-h">Pipeline</h2><div class="funnel">' + ['new', 'shortlist', 'ask', 'pass'].map(function (st) {
+      return '<div class="fn-row"><span>' + STAGE_LABEL[st] + '</span><div class="fn-bar"><i class="' + st + '" style="width:' + Math.round(by[st] / max * 100) + '%"></i></div><b>' + by[st] + '</b></div>';
+    }).join('') + '</div></section>';
     if (screened.length >= 2) {
       var cov = Engine.coverage(reqs, screened.map(function (r) { return { checks: r.c.screen.checks }; })).sort(function (a, b) {
         return a.counts.met - b.counts.met || b.counts.not_met - a.counts.not_met;
       });
-      out += '<section class="coverage"><h2>Where the pool is thin</h2><p class="hint" style="margin-top:4px">How many screened candidates state each requirement, hardest to find first. Search harder for the top rows.</p><ul class="cov-list">' +
+      out += '<section class="card pad"><h2 class="card-h">Where the pool is thin</h2><p class="hint" style="margin-bottom:8px">How many screened candidates state each requirement. Search harder for the top rows.</p><ul class="cov-list">' +
         cov.map(function (c) {
-          var segs = ['met', 'not_stated', 'not_met'].filter(function (s) { return c.counts[s]; }).map(function (s) {
-            return '<span class="seg s-' + s + '" style="flex:' + c.counts[s] + '"></span>';
+          var segs = ['met', 'not_stated', 'not_met'].filter(function (s2) { return c.counts[s2]; }).map(function (s2) {
+            return '<span class="seg s-' + s2 + '" style="flex:' + c.counts[s2] + '"></span>';
           }).join('');
           var thin = c.counts.met / (c.total || 1) <= 0.34;
-          return '<li><span>' + esc(c.req.text) + '</span><div class="bar" role="img" aria-label="' + c.counts.met + ' of ' + c.total + ' candidates state this">' + segs + '</div><span class="cnt' + (thin ? ' thin' : '') + '">' + c.counts.met + ' of ' + c.total + ' state it</span></li>';
+          return '<li><span>' + esc(c.req.text) + '</span><div class="bar" role="img" aria-label="' + c.counts.met + ' of ' + c.total + ' candidates state this">' + segs + '</div><span class="cnt' + (thin ? ' thin' : '') + '">' + c.counts.met + ' of ' + c.total + '</span></li>';
         }).join('') + '</ul></section>';
-    }
-    return out;
+    } else out += '<section class="card pad"><h2 class="card-h">Where the pool is thin</h2><p class="muted">Needs at least two screened applicants.</p></section>';
+    return out + '</div>';
+  }
+
+  function drawerHtml(r) {
+    return '<div class="drawer-backdrop" data-act="close-drawer"></div>' +
+      '<aside class="drawer" role="dialog" aria-modal="true" aria-label="Applicant: ' + esc(r.c.name) + '">' +
+      '<button type="button" class="icon-btn drawer-close" data-act="close-drawer" aria-label="Close">' + icon('x') + '</button>' + detailPane(r) + '</aside>';
   }
 
   function contactUrls(c) {
@@ -597,8 +736,7 @@
     var o = getOutreach();
     var h = '<div class="detail"><div class="detail-inner">';
 
-    h += '<a class="crumb back-mobile" href="#/job/' + esc(j.id) + '/applicants">' + icon('arrow-left') + ' All applicants</a>';
-    h += '<div class="detail-top"><div><h2>' + esc(c.name) + '</h2><p class="muted small" style="margin-top:8px">' +
+    h += '<div class="detail-top">' + person(c.name) + '<div class="dt-main"><h2>' + esc(c.name) + '</h2><p class="muted small">' +
       (c.location ? esc(c.location) + ' &middot; ' : '') + (c.source === 'manual' ? 'Added ' : 'Applied ') + esc(fmtDate(c.createdAt)) + '</p></div>' +
       (sc ? '<div class="score">' + sc.now + '%' + (sc.potential > sc.now ? '<small>up to ' + sc.potential + '% if verified</small>' : '') + '</div>' : '<div class="muted small">Not screened yet</div>') + '</div>';
 
@@ -631,6 +769,9 @@
         (iv.followUpQuestions && iv.followUpQuestions.length ? '<div><strong>Follow-ups:</strong><ul class="questions" style="margin-top:4px">' + iv.followUpQuestions.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul></div>' : '') +
         '<p class="small muted">Written by AI from the candidate&rsquo;s own answers. Check it before relying on it.</p></div></section>';
     }
+
+    // profile roadmap
+    if (c.profile && (c.profile.experience || c.profile.education || c.profile.skills)) h += '<section><h3>Profile</h3>' + CvTools.profileHtml(c.profile) + '</section>';
 
     // CV
     h += '<section><details><summary class="link-btn" style="cursor:pointer">Read the full CV</summary><div style="margin-top:12px;white-space:pre-wrap;font-size:0.9rem;color:var(--ink-2);overflow-wrap:anywhere">' + esc(c.cv) + '</div></details>' +
@@ -691,7 +832,7 @@
       var chunk = list.slice(i, i + CHUNK);
       ui.screening = 'Reading ' + Math.min(done + chunk.length, list.length) + ' of ' + list.length + '. This can take a little while with AI.';
       rerender();
-      var payload = chunk.map(function (c) { return { id: c.id, name: c.name, cv: c.cv }; });
+      var payload = chunk.map(function (c) { return { id: c.id, name: c.name, cv: Engine.cvWithProfile(c.cv, c.profile) }; });
       var results = null, usedAi = false;
       if (app.ai) {
         try {
@@ -702,7 +843,7 @@
       if (!results) results = Engine.demoScreen(reqs, payload);
 
       var save = results.map(function (r) {
-        return { candId: r.id, screen: { reqSig: sig, usedAi: usedAi, at: new Date().toISOString(), summary: r.summary || '', checks: r.checks || [], questions: r.questions || [] } };
+        return { candId: r.id, screen: { reqSig: sig, usedAi: usedAi, now: Engine.score(j.requirements, r.checks || []).now, at: new Date().toISOString(), summary: r.summary || '', checks: r.checks || [], questions: r.questions || [] } };
       });
       try { await call('screensSave', { jobId: j.id, key: cache.key, results: save }); }
       catch (err) { ui.notice = 'Could not save screening results: ' + err.message; }
@@ -723,12 +864,13 @@
 
   function requirementsTab() {
     var e = edit, j = cache.job;
-    return '<div class="kv"><section><h2>The role</h2><div class="form-grid" style="margin-top:12px">' +
-      '<div class="field"><label class="label" for="e-title">Role title</label><input id="e-title" type="text" maxlength="100" data-field="edit.title" value="' + esc(e.title) + '"></div>' +
+    return '<div class="kv"><section class="card pad"><h2 class="card-h">Job details</h2><div class="form-grid" style="margin-top:12px">' +
+      '<div class="field"><label class="label" for="e-title">Job title</label><input id="e-title" type="text" maxlength="100" data-field="edit.title" value="' + esc(e.title) + '"></div>' +
       '<div class="field"><label class="label" for="e-company">Company</label><input id="e-company" type="text" maxlength="80" data-field="edit.company" value="' + esc(e.company) + '"></div></div>' +
-      '<div class="field" style="margin-top:16px"><label class="label" for="e-jd">Job description</label><textarea id="e-jd" rows="6" data-field="edit.jd">' + esc(e.jd) + '</textarea></div></section>' +
-      '<section><h2>Requirements</h2><p class="hint" style="margin:4px 0 12px">Applicants are ranked against these. If you change them, applicants are marked as needing a fresh screen.</p>' + reqEditor('edit', e.reqs) + '</section>' +
-      '<section><div class="field" style="max-width:16rem"><label class="label" for="e-status">Applications</label><select id="e-status" data-field="edit.status"><option value="open"' + (e.status === 'open' ? ' selected' : '') + '>Open</option><option value="closed"' + (e.status === 'closed' ? ' selected' : '') + '>Closed</option></select></div></section>' +
+      '<div style="margin-top:16px">' + jobFields('edit', e) + '</div>' +
+      '<div class="field" style="margin-top:16px"><label class="label" for="e-jd">Description</label><textarea id="e-jd" rows="6" data-field="edit.jd">' + esc(e.jd) + '</textarea></div></section>' +
+      '<section class="card pad"><h2 class="card-h">Requirements</h2><p class="hint" style="margin:4px 0 12px">Applicants are ranked against these. If you change them, applicants are marked as needing a fresh screen.</p>' + reqEditor('edit', e.reqs) + '</section>' +
+      '<section class="card pad"><div class="field" style="max-width:16rem"><label class="label" for="e-status">Applications</label><select id="e-status" data-field="edit.status"><option value="open"' + (e.status === 'open' ? ' selected' : '') + '>Open</option><option value="closed"' + (e.status === 'closed' ? ' selected' : '') + '>Closed</option></select></div></section>' +
       '<p id="edit-msg" class="field-msg error" role="alert"></p>' +
       '<div class="row"><button class="btn lg" data-act="save-job">Save changes</button><a class="btn ghost" href="#/job/' + esc(j.id) + '/applicants">Cancel</a></div></div>';
   }
@@ -738,22 +880,27 @@
     var applyUrl = ScoutData.applyLink(j);
     var privateUrl = location.origin + '/hire#/job/' + j.id + '?key=' + cache.key;
     return '<div class="kv">' +
-      '<section><h2>Apply link</h2><p class="hint">Send this to candidates. It shows the role and lets them apply.</p>' +
+      '<section class="card pad"><h2 class="card-h">Apply link</h2><p class="hint">Send this to candidates. It shows the role and lets them apply.</p>' +
       '<div class="link-box"><code>' + esc(applyUrl) + '</code><button class="btn sm" data-act="copy-apply">' + icon('copy') + ' Copy</button></div>' +
       '<p style="margin-top:12px"><a href="' + esc(applyUrl) + '" target="_blank" rel="noopener">Preview as a candidate</a></p></section>' +
-      '<section><h2>Your private recruiter link</h2><p class="hint">Opens this job on another device. <strong>Anyone with this link can see the applicants</strong>, so keep it to yourself.</p>' +
+      '<section class="card pad"><h2 class="card-h">Public job board</h2><p class="hint">' + (j.listed ? 'This job is listed on the public job board, so candidates can find it and get matched to it.' : 'This job is hidden from the public job board. Only people with the apply link can see it.') + '</p>' +
+      '<div class="row" style="margin-top:12px"><button class="btn secondary" data-act="toggle-listed">' + (j.listed ? 'Remove from job board' : 'List on job board') + '</button></div></section>' +
+      '<section class="card pad"><h2 class="card-h">Your private recruiter link</h2><p class="hint">Opens this job on another device. <strong>Anyone with this link can see the applicants</strong>, so keep it to yourself.</p>' +
       '<div class="link-box"><code>' + esc(privateUrl) + '</code><button class="btn sm" data-act="copy-private">' + icon('copy') + ' Copy</button></div></section>' +
-      '<section><h2>Where applications are saved</h2>' +
+      '<section class="card pad"><h2 class="card-h">Where applications are saved</h2>' +
       (app.mode === 'remote'
         ? '<p class="hint">Shared storage is on. Candidates can apply from any device and the applications reach you here.</p>'
         : '<div class="banner info" style="margin-top:8px"><span><strong>This browser only.</strong> This site has no shared storage set up, so applications are saved in this browser. Candidates must apply in the same browser, which is fine for a demo. To receive applications from other devices, add a free Upstash Redis database (see the README) and redeploy.</span></div>') + '</section>' +
-      '<section><h2>Job status</h2><p class="hint">Closing stops new applications. Existing applicants stay.</p><div class="row" style="margin-top:12px">' +
+      '<section class="card pad"><h2 class="card-h">Job status</h2><p class="hint">Closing stops new applications. Existing applicants stay.</p><div class="row" style="margin-top:12px">' +
       '<button class="btn secondary" data-act="toggle-status">' + (j.status === 'open' ? 'Close applications' : 'Reopen applications') + '</button>' +
       '<button class="btn danger" data-act="forget" data-id="' + esc(j.id) + '" data-then="home">Remove from this browser</button></div></section></div>';
   }
 
   /* ================================================================ EVENTS */
 
+  function onBoth(ev, fn) { view.addEventListener(ev, fn); $('drawer-host').addEventListener(ev, fn); }
+
+  var searchT = null;
   var acts = {
     sample: function (t) { makeSample(t).catch(function (e) { toast(e.message); t.disabled = false; }); },
     forget: function (t) {
@@ -782,7 +929,13 @@
     'req-add': function (t) { addReq(t.dataset.list); },
     'copy-apply': function () { copyText(ScoutData.applyLink(cache.job), 'Apply link copied'); },
     'copy-private': function () { copyText(location.origin + '/hire#/job/' + cache.job.id + '?key=' + cache.key, 'Private link copied'); },
-    filter: function (t) { ui.filter = t.dataset.f; focusSel = 'button[data-f="' + t.dataset.f + '"]'; rerender(); },
+    view: function (t) { ui.view = t.dataset.v; focusSel = 'button[data-v="' + t.dataset.v + '"]'; rerender(); },
+    'close-drawer': function () { closeDrawer(); },
+    'toggle-listed': function () {
+      call('jobUpdate', { id: cache.id, key: cache.key, patch: { listed: !cache.job.listed } }).then(function (r) {
+        cache.job = r.job; rerender(); toast(r.job.listed ? 'Listed on the job board' : 'Removed from the job board');
+      }).catch(function (e) { toast(e.message); });
+    },
     'toggle-add': function () { ui.showAdd = !ui.showAdd; rerender(); if (ui.showAdd) { var n = $('add-name'); if (n) n.focus(); } },
     refresh: async function () {
       try { cache = await loadJob(cache.id); rerender(); toast('Up to date'); } catch (e) { toast(e.message); }
@@ -796,13 +949,8 @@
     stage: function (t) {
       var c = cache.cands.filter(function (x) { return x.id === t.dataset.id; })[0];
       if (!c) return;
-      var prev = c.stage;
-      c.stage = c.stage === t.dataset.stage ? 'new' : t.dataset.stage;
       focusSel = 'button[data-act="stage"][data-stage="' + t.dataset.stage + '"]';
-      rerender();
-      call('candidatePatch', { jobId: cache.id, key: cache.key, candId: c.id, patch: { stage: c.stage } }).catch(function (e) {
-        c.stage = prev; rerender(); toast('Could not save: ' + e.message);
-      });
+      setStage(c, c.stage === t.dataset.stage ? 'new' : t.dataset.stage);
     },
     'remove-cand': function (t) {
       var c = cache.cands.filter(function (x) { return x.id === t.dataset.id; })[0];
@@ -823,6 +971,15 @@
     }
   };
 
+  function setStage(c, next) {
+    var prev = c.stage;
+    c.stage = next;
+    rerender();
+    call('candidatePatch', { jobId: cache.id, key: cache.key, candId: c.id, patch: { stage: next } }).catch(function (e) {
+      c.stage = prev; rerender(); toast('Could not save: ' + e.message);
+    });
+  }
+
   function addReq(listName) {
     var inp = $('new-req-' + listName);
     var text = inp.value.trim();
@@ -833,7 +990,7 @@
     inp.focus();
   }
 
-  view.addEventListener('click', function (e) {
+  onBoth('click', function (e) {
     var contact = e.target.closest('a[data-contact]');
     if (contact && cache) {
       var c = cache.cands.filter(function (x) { return x.id === contact.dataset.contact; })[0];
@@ -845,13 +1002,16 @@
       return;
     }
     var t = e.target.closest('[data-act]');
-    if (t && acts[t.dataset.act]) acts[t.dataset.act](t, e);
+    if (t && acts[t.dataset.act]) { acts[t.dataset.act](t, e); return; }
+    var tr = e.target.closest('tr[data-href]');
+    if (tr && !e.target.closest('a, button')) location.hash = tr.dataset.href;
   });
 
-  view.addEventListener('input', function (e) {
+  onBoth('input', function (e) {
     var t = e.target, f = t.dataset.field;
     if (!f) return;
     if (f === 'req-text') { var r = listFor(t.dataset.list)[+t.dataset.i]; if (r) r.text = t.value; return; }
+    if (f === 'ui.search') { ui.search = t.value; clearTimeout(searchT); searchT = setTimeout(function () { var pos = t.selectionStart; focusSel = '#cand-search'; rerender(); var n = $('cand-search'); if (n) n.setSelectionRange(pos, pos); }, 180); return; }
     if (f.indexOf('draft.') === 0) { draft[f.slice(6)] = t.value; return; }
     if (f.indexOf('edit.') === 0 && edit) { edit[f.slice(5)] = t.value; return; }
     if (f === 'o-name' || f === 'o-company' || f === 'o-template') {
@@ -861,19 +1021,21 @@
       refreshContactLinks();
     }
   });
-  view.addEventListener('change', function (e) {
+  onBoth('change', function (e) {
     var t = e.target;
-    if (t.dataset.field === 'edit.status' && edit) edit.status = t.value;
+    var f2 = t.dataset.field || '';
+    if (f2.indexOf('edit.') === 0 && edit) edit[f2.slice(5)] = t.value;
+    else if (f2.indexOf('draft.') === 0) draft[f2.slice(6)] = t.value;
   });
 
-  view.addEventListener('keydown', function (e) {
+  onBoth('keydown', function (e) {
     if (e.key === 'Enter' && e.target.dataset && e.target.dataset.field === 'new-req') {
       e.preventDefault();
       addReq(e.target.dataset.list);
     }
   });
 
-  view.addEventListener('submit', function (e) {
+  onBoth('submit', function (e) {
     e.preventDefault();
     var f = e.target.dataset.form;
     if (f === 'chat') sendChat();
@@ -888,7 +1050,7 @@
     var u = contactUrls(c);
     var map = { wa: u.wa, tel: u.tel, mail: u.mail };
     Object.keys(map).forEach(function (k) {
-      var a = view.querySelector('.contact-btn.' + k);
+      var a = document.querySelector('.contact-btn.' + k);
       if (a && map[k]) a.setAttribute('href', map[k]);
     });
   }
@@ -910,7 +1072,7 @@
     if (!edit.title.trim()) { msg.textContent = 'The title cannot be empty.'; return; }
     if (!reqs.length) { msg.textContent = 'Keep at least one requirement.'; return; }
     try {
-      var res = await call('jobUpdate', { id: cache.id, key: cache.key, patch: { title: edit.title, company: edit.company, jd: edit.jd, status: edit.status, requirements: reqs } });
+      var res = await call('jobUpdate', { id: cache.id, key: cache.key, patch: { title: edit.title, company: edit.company, location: edit.location, type: edit.type, workMode: edit.workMode, jd: edit.jd, status: edit.status, requirements: reqs } });
       var before = reqSig(cache.job.requirements);
       cache.job = res.job;
       ScoutData.rememberJob(res.job, cache.key);
@@ -947,6 +1109,38 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
   }
 
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && $('drawer-host').firstChild) closeDrawer(); });
+
+  // Drag a card to another column to change its stage.
+  view.addEventListener('dragstart', function (e) {
+    var k = e.target.closest && e.target.closest('.kcard');
+    if (!k) return;
+    e.dataTransfer.setData('text/plain', k.dataset.cand);
+    e.dataTransfer.effectAllowed = 'move';
+    k.classList.add('dragging');
+  });
+  view.addEventListener('dragend', function (e) {
+    var k = e.target.closest && e.target.closest('.kcard');
+    if (k) k.classList.remove('dragging');
+    Array.prototype.forEach.call(view.querySelectorAll('.kcol.over'), function (c) { c.classList.remove('over'); });
+  });
+  view.addEventListener('dragover', function (e) {
+    var col = e.target.closest && e.target.closest('.kcol');
+    if (!col) return;
+    e.preventDefault();
+    Array.prototype.forEach.call(view.querySelectorAll('.kcol.over'), function (c) { if (c !== col) c.classList.remove('over'); });
+    col.classList.add('over');
+  });
+  view.addEventListener('drop', function (e) {
+    var col = e.target.closest && e.target.closest('.kcol');
+    if (!col) return;
+    e.preventDefault();
+    var id = e.dataTransfer.getData('text/plain');
+    var c = cache && cache.cands.filter(function (x) { return x.id === id; })[0];
+    if (!c || c.stage === col.dataset.stage) { rerender(); return; }
+    setStage(c, col.dataset.stage);
+  });
+
   // Pick up new applicants when returning to the tab (shared storage only).
   document.addEventListener('visibilitychange', function () {
     if (document.hidden || !cache || cache.locked || app.mode !== 'remote' || ui.screening) return;
@@ -955,6 +1149,126 @@
     if (r.parts[0] !== 'job' || (r.parts[2] && r.parts[2] !== 'applicants')) return;
     loadJob(cache.id).then(function (d) { cache = d; rerender(); }).catch(function () { /* ignore */ });
   });
+
+  /* ================================================================ ASSISTANT ("Ask Scout") */
+
+  var asst = { open: false, busy: false, log: [] };
+  var EXAMPLES = ['Show me the top 10 candidates', 'Top 30 who know sales', 'Who is shortlisted?', 'Candidates above 70%'];
+
+  function asstHtml() {
+    var msgs = asst.log.map(function (m) {
+      if (m.kind === 'cards') return '<div class="a-cards">' + m.html + '</div>';
+      return '<div class="msg ' + (m.role === 'me' ? 'me' : 'ai') + '">' + esc(m.text) + '</div>';
+    }).join('');
+    return '<button type="button" class="asst-fab" data-act="asst-toggle" aria-expanded="' + asst.open + '" aria-controls="asst-panel">' + icon('star') + '<span>Ask Scout</span></button>' +
+      '<section class="asst" id="asst-panel" role="dialog" aria-label="Ask Scout" ' + (asst.open ? '' : 'hidden') + '>' +
+      '<header><div><strong>Ask Scout</strong><small>Ask for candidates in plain words</small></div><button type="button" class="icon-btn" data-act="asst-toggle" aria-label="Close">' + icon('x') + '</button></header>' +
+      '<div class="asst-log" id="asst-log" aria-live="polite">' +
+      (asst.log.length ? msgs : '<div class="msg ai">Hi. Tell me what you want to see, for example &ldquo;show me the top 30 candidates&rdquo;. I will list them with their score and skills, and you can open any one to read the whole CV.</div><div class="asst-ex">' + EXAMPLES.map(function (x) { return '<button type="button" class="chip-btn" data-act="asst-ex" data-text="' + esc(x) + '">' + esc(x) + '</button>'; }).join('') + '</div>') +
+      (asst.busy ? '<div class="typing"><i></i><i></i><i></i></div>' : '') + '</div>' +
+      '<form class="asst-form" id="asst-form"><label class="visually-hidden" for="asst-in">Ask Scout</label><input id="asst-in" type="text" maxlength="300" autocomplete="off" placeholder="e.g. top 30 candidates"><button class="btn" type="submit"' + (asst.busy ? ' disabled' : '') + '>Ask</button></form></section>';
+  }
+  function paintAsst() {
+    var host = $('asst-host');
+    var keep = host.querySelector('#asst-in'), val = keep ? keep.value : '', had = keep && document.activeElement === keep;
+    host.innerHTML = asstHtml();
+    var inp = host.querySelector('#asst-in'); inp.value = val;
+    if (had || asst.open) { if (had) inp.focus(); }
+    var log = host.querySelector('#asst-log'); if (log) log.scrollTop = log.scrollHeight;
+  }
+  function asstSay(role, text) { asst.log.push({ role: role, text: text }); }
+
+  function cardFor(r, rank) {
+    var c = r.c, p = c.profile || {};
+    var skills = (p.skills || []).slice(0, 3);
+    var where = c.location || p.location || '';
+    return '<a class="cand-card" href="#/job/' + esc(cache.job.id) + '/applicants/' + esc(c.id) + '" data-act="asst-open">' +
+      '<span class="cc-rank">' + rank + '</span>' + person(c.name) +
+      '<span class="cc-main"><strong>' + esc(c.name) + '</strong><small>' + esc(p.headline || (where || 'Applicant')) + '</small>' +
+      (skills.length ? '<span class="chips">' + skills.map(function (k) { return '<span class="chip skill">' + esc(k) + '</span>'; }).join('') + '</span>' : '') + '</span>' +
+      '<span class="cc-side">' + pill(r.sc) + (where ? '<small>' + esc(where) + '</small>' : '') + '</span></a>';
+  }
+
+  async function runIntent(intent) {
+    var jobs = ScoutData.myJobs();
+    if (!jobs.length) return { text: 'You have no jobs yet. Post a job first and share its link.' };
+    var r = parseHash();
+    var current = r.parts[0] === 'job' ? r.parts[1] : '';
+    var id = intent.jobId || current || (cache && cache.id) || jobs[0].id;
+    if (!jobs.filter(function (j) { return j.id === id; })[0]) id = jobs[0].id;
+    var data = (cache && cache.id === id && !cache.locked) ? cache : await loadJob(id);
+    if (data.locked) return { text: 'That job is not linked to this browser, so I cannot open its applicants.' };
+    cache = data;
+    if (!data.cands.length) return { text: 'No one has applied to ' + data.job.title + ' yet. Share its apply link to get applicants.' };
+    var need = needsScreen();
+    if (need.length) { asstSay('ai', 'Reading ' + plural(need.length, 'CV') + ' first...'); paintAsst(); await screenCands(need); }
+    var rows = rowsFor();
+    rows = rows.filter(function (x) {
+      var c = x.c, p = c.profile || {};
+      if (intent.stage && c.stage !== intent.stage) return false;
+      if (intent.interviewed && !c.interview) return false;
+      if (intent.minScore && (!x.sc || x.sc.now < intent.minScore)) return false;
+      if (intent.location) {
+        var loc = (String(c.location || '') + ' ' + String(p.location || '') + ' ' + String(c.cv || '').slice(0, 400)).toLowerCase();
+        if (loc.indexOf(String(intent.location).toLowerCase()) < 0) return false;
+      }
+      if (intent.skills && intent.skills.length) {
+        var hay = (String(c.cv || '') + ' ' + (p.skills || []).join(' ')).toLowerCase();
+        if (!intent.skills.every(function (k) { return hay.indexOf(String(k).toLowerCase()) >= 0; })) return false;
+      }
+      return true;
+    });
+    var top = rows.slice(0, Math.max(1, Math.min(100, intent.n || 10)));
+    if (intent.action === 'shortlist') {
+      if (!top.length) return { text: 'No candidates match that, so nobody was shortlisted.' };
+      top.forEach(function (x) { if (x.c.stage !== 'shortlist') setStage(x.c, 'shortlist'); });
+      return { text: 'I marked ' + plural(top.length, 'candidate') + ' as shortlisted for ' + data.job.title + '. You can undo any of them from the pipeline.', html: top.map(function (x, i) { return cardFor(x, i + 1); }).join('') };
+    }
+    if (!top.length) return { text: 'No one matches that for ' + data.job.title + '. Try a looser request.' };
+    var rough = top.some(function (x) { return x.c.screen && !x.c.screen.usedAi; });
+    return { text: 'Here ' + (top.length === 1 ? 'is' : 'are') + ' ' + (intent.n && rows.length > top.length ? 'the top ' + top.length : plural(top.length, 'candidate')) + ' for ' + data.job.title + ', best match first.' + (rough ? ' Scores use keyword matching, so treat them as a first pass.' : ''), html: top.map(function (x, i) { return cardFor(x, i + 1); }).join('') };
+  }
+
+  async function askScout(text) {
+    if (!text || asst.busy) return;
+    asstSay('me', text); asst.busy = true; paintAsst();
+    var jobs = ScoutData.myJobs().map(function (j) { return { id: j.id, title: j.title }; });
+    var r = parseHash(), current = r.parts[0] === 'job' ? r.parts[1] : '';
+    var intent = null, reply = '';
+    try {
+      var resp = await postJson('/api/assistant', { message: text, jobs: jobs, currentJobId: current });
+      intent = resp.intent; reply = resp.reply || '';
+    } catch (e) { intent = null; }
+    if (!intent) intent = Engine.parseIntent(text, jobs, current);
+    var out;
+    try {
+      if (intent.action === 'help' || intent.action === 'answer') {
+        out = { text: reply || 'I can show your top candidates ("top 30"), filter them ("top 10 in Lagos who know sales", "above 70%", "who is shortlisted", "who did the chat"), or shortlist the best ones ("shortlist the top 5"). Click any card to read the full CV.' };
+      } else {
+        out = await runIntent(intent);
+      }
+    } catch (e) { out = { text: 'That did not work: ' + e.message }; }
+    asst.busy = false;
+    asstSay('ai', out.text);
+    if (out.html) asst.log.push({ kind: 'cards', html: out.html });
+    paintAsst();
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-act^="asst"]');
+    if (!t) return;
+    var act = t.dataset.act;
+    if (act === 'asst-toggle') { asst.open = !asst.open; paintAsst(); if (asst.open) $('asst-in').focus(); }
+    else if (act === 'asst-ex') askScout(t.dataset.text);
+    else if (act === 'asst-open') { if (window.matchMedia('(max-width: 720px)').matches) { asst.open = false; paintAsst(); } }
+  });
+  document.addEventListener('submit', function (e) {
+    if (e.target.id !== 'asst-form') return;
+    e.preventDefault();
+    var inp = $('asst-in'), v = inp.value.trim(); inp.value = '';
+    askScout(v);
+  });
+  paintAsst();
 
   /* ---------------------------------------------------------------- start */
   route();
