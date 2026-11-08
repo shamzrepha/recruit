@@ -203,3 +203,180 @@ async function rejects(p, status, re) {
 
   console.log('All core tests passed successfully!');
 })().catch((e) => { console.error(e); process.exit(1); });
+
+/* ---------------- short links and accounts ---------------- */
+(async () => {
+  const core = require('../core.js');
+  const kv = core.memoryKV();
+  const c = core.createCore(kv);
+  const made = await c.jobCreate({ title: 'Support Agent', requirements: [{ text: '2+ years support experience', weight: 'must' }] });
+  assert.ok(/^[A-HJKMNP-Z2-9]{6,7}$/.test(made.job.code), 'short code: ' + made.job.code);
+  assert.strictEqual((await c.jobByCode({ code: made.job.code.toLowerCase() })).job.id, made.job.id, 'code lookup is case-insensitive');
+  await assert.rejects(() => c.jobByCode({ code: 'ZZZZZZ' }), /not found/);
+  await assert.rejects(() => c.jobByCode({ code: '../x' }), /not valid/);
+  const codes = new Set();
+  for (let i = 0; i < 30; i++) codes.add((await c.jobCreate({ title: 'T' + i, requirements: [{ text: 'x', weight: 'must' }] })).job.code);
+  assert.strictEqual(codes.size, 30, 'codes are unique');
+
+  // accounts
+  await assert.rejects(() => c.accountSignup({ email: 'bad', password: 'password123', name: 'A' }), /valid email/);
+  await assert.rejects(() => c.accountSignup({ email: 'a@b.co', password: 'short', name: 'A' }), /8 characters/);
+  const su = await c.accountSignup({ email: 'Ada@Example.com', password: 'correct-horse', name: 'Ada' });
+  assert.ok(/^s_[0-9a-f]{32}$/.test(su.session));
+  assert.ok(!JSON.stringify(su).includes('hash') && !JSON.stringify(su).includes('salt'), 'no secrets returned');
+  await assert.rejects(() => c.accountSignup({ email: 'ada@example.com', password: 'correct-horse', name: 'Ada' }), /already exists/);
+  await assert.rejects(() => c.accountLogin({ email: 'ada@example.com', password: 'wrong-password' }), /wrong/);
+  const li = await c.accountLogin({ email: 'ADA@example.com', password: 'correct-horse' });
+  await assert.rejects(() => c.accountMe({ session: 's_' + '0'.repeat(32) }), /expired|sign in/i);
+  await assert.rejects(() => c.accountMe({ session: 'junk' }), /sign in/i);
+
+  // apply with a session attaches the application; status follows the recruiter's stage
+  const ap = await c.apply({ jobId: made.job.id, name: 'Ada', cv: 'Customer support agent with 3 years of experience helping customers.', session: li.session });
+  let m = await c.accountMe({ session: li.session });
+  assert.strictEqual(m.apps.length, 1);
+  assert.strictEqual(m.apps[0].statusLabel, 'Received');
+  assert.ok(!('screen' in m.apps[0]) && !('notes' in m.apps[0]), 'candidates never see recruiter screening');
+  await c.candidatePatch({ jobId: made.job.id, key: made.key, candId: ap.token, patch: { stage: 'shortlist' } });
+  m = await c.accountMe({ session: li.session });
+  assert.strictEqual(m.apps[0].statusLabel, 'Shortlisted');
+
+  // employer jobs sync: only keys that match are accepted
+  await c.accountSyncJobs({ session: li.session, jobs: [{ id: made.job.id, key: made.key }, { id: made.job.id, key: 'wrong' }] });
+  m = await c.accountMe({ session: li.session });
+  assert.strictEqual(m.jobs.length, 1);
+  assert.strictEqual(m.jobs[0].key, made.key);
+  await c.accountSyncJobs({ session: li.session, jobs: [{ id: made.job.id, key: 'nope' }] });
+
+  // save profile
+  await c.accountSave({ session: li.session, profile: { name: 'Ada', skills: ['Support'] }, cvText: 'my cv', prefs: { want: 'support', location: 'Abuja' } });
+  m = await c.accountMe({ session: li.session });
+  assert.strictEqual(m.account.profile.skills[0], 'Support');
+  assert.strictEqual(m.account.prefs.want, 'support');
+
+  // withdrawn applications disappear from the account
+  await c.candidateDelete({ token: ap.token });
+  m = await c.accountMe({ session: li.session });
+  assert.strictEqual(m.apps.length, 0);
+
+  // lock-out after repeated wrong passwords
+  for (let i = 0; i < 8; i++) await c.accountLogin({ email: 'ada@example.com', password: 'bad' + i }).catch(() => {});
+  await assert.rejects(() => c.accountLogin({ email: 'ada@example.com', password: 'correct-horse' }), /Too many/);
+
+  // sign-out and delete
+  await c.accountLogout({ session: su.session });
+  await assert.rejects(() => c.accountMe({ session: su.session }), /expired|sign in/i);
+  await assert.rejects(() => c.accountDelete({ session: li.session, password: 'nope' }), /not right/);
+  console.log('Short link and account tests passed.');
+})().catch((e) => { console.error(e); process.exit(1); });
+
+/* ---------------- reset password, Google sign-in, email alerts ---------------- */
+(async () => {
+  const core = require('../core.js');
+  const { mailer, googleVerifier } = require('../lib/mail.js');
+  const kv = core.memoryKV();
+  const sent = [];
+  const google = { 'tok-ok': { email: 'Squat@Example.com', verified: true, name: 'Real Owner' }, 'tok-unverified': { email: 'x@example.com', verified: false, name: 'X' } };
+  const c = core.createCore(kv, {
+    origin: 'https://scout.test',
+    sendMail: async (m) => { sent.push(m); },
+    verifyGoogle: async (t) => google[t] || null
+  });
+
+  // reset flow: same answer for unknown emails, no email sent for them
+  let r = await c.accountForgot({ email: 'nobody@example.com' });
+  assert.strictEqual(r.sent, true);
+  assert.strictEqual(sent.length, 0, 'no email for unknown address');
+
+  const su = await c.accountSignup({ email: 'bola@example.com', password: 'first-pass-1', name: 'Bola' });
+  await c.accountForgot({ email: 'bola@example.com' });
+  assert.strictEqual(sent.length, 1);
+  const link = /https:\/\/scout\.test\/account\?reset=(r_[0-9a-f]{32})/.exec(sent[0].text);
+  assert.ok(link, 'email holds a reset link');
+  await assert.rejects(() => c.accountReset({ token: link[1], password: 'short' }), /8 characters/);
+  await assert.rejects(() => c.accountReset({ token: 'r_' + '0'.repeat(32), password: 'second-pass-2' }), /expired/);
+  const rs = await c.accountReset({ token: link[1], password: 'second-pass-2' });
+  assert.ok(rs.session);
+  await assert.rejects(() => c.accountReset({ token: link[1], password: 'third-pass-3' }), /expired/, 'link works once');
+  await assert.rejects(() => c.accountMe({ session: su.session }), /expired|sign in/i, 'old sessions are signed out');
+  await assert.rejects(() => c.accountLogin({ email: 'bola@example.com', password: 'first-pass-1' }), /not right|wrong|incorrect/i);
+  await c.accountLogin({ email: 'bola@example.com', password: 'second-pass-2' });
+  // limited to 3 requests an hour
+  await c.accountForgot({ email: 'bola@example.com' }); await c.accountForgot({ email: 'bola@example.com' });
+  await assert.rejects(() => c.accountForgot({ email: 'bola@example.com' }), /Too many/);
+
+  // email off: honest answer
+  const off = core.createCore(core.memoryKV(), {});
+  assert.deepStrictEqual(await off.accountForgot({ email: 'a@example.com' }), { sent: false, configured: false });
+  await assert.rejects(() => off.accountGoogle({ credential: 'tok-ok' }), /not switched on/);
+
+  // Google: creates account, rejects bad/unverified tokens
+  await assert.rejects(() => c.accountGoogle({ credential: 'nope' }), /could not confirm/);
+  await assert.rejects(() => c.accountGoogle({ credential: 'tok-unverified' }), /could not confirm/);
+  const g = await c.accountGoogle({ credential: 'tok-ok' });
+  assert.strictEqual(g.account.email, 'squat@example.com');
+  assert.strictEqual(g.account.google, true);
+  assert.strictEqual(g.account.hasPassword, false);
+  assert.ok((await c.accountMe({ session: g.session })).account);
+  // a Google-only account cannot be logged into with an empty password
+  await assert.rejects(() => c.accountLogin({ email: 'squat@example.com', password: '' }), /./);
+  await c.accountDelete({ session: g.session, password: '' });
+
+  // squatting: someone registers an email they do not own, the real owner signs in with Google
+  const sq = await c.accountSignup({ email: 'squat@example.com', password: 'attacker-pass', name: 'Mallory' });
+  const owner = await c.accountGoogle({ credential: 'tok-ok' });
+  await assert.rejects(() => c.accountMe({ session: sq.session }), /expired|sign in/i, 'attacker session dies');
+  await assert.rejects(() => c.accountLogin({ email: 'squat@example.com', password: 'attacker-pass' }), /./, 'attacker password is gone');
+  assert.ok(owner.session);
+
+  // emails: application received, shortlisted, employer new applicant
+  sent.length = 0;
+  const emp = await c.accountSignup({ email: 'boss@example.com', password: 'boss-pass-123', name: 'Boss' });
+  const job = await c.jobCreate({ title: 'Sales Rep', company: 'Acme', requirements: [{ text: '2 years sales', weight: 'must' }] });
+  await c.accountSyncJobs({ session: emp.session, jobs: [{ id: job.job.id, key: job.key }] });
+  const cand = await c.accountSignup({ email: 'cand@example.com', password: 'cand-pass-123', name: 'Cand' });
+  const ap = await c.apply({ jobId: job.job.id, cv: 'Sales rep with 3 years of experience selling software.', name: 'Cand', session: cand.session });
+  const subjects = sent.map((m) => m.subject + ' -> ' + m.to);
+  assert.ok(subjects.some((s) => /Application received: Sales Rep -> cand@example.com/.test(s)), subjects.join('|'));
+  assert.ok(subjects.some((s) => /New applicant for Sales Rep -> boss@example.com/.test(s)), subjects.join('|'));
+  sent.length = 0;
+  await c.candidatePatch({ jobId: job.job.id, key: job.key, candId: ap.token, patch: { stage: 'shortlist' } });
+  assert.ok(sent.some((m) => /shortlisted/.test(m.subject) && m.to === 'cand@example.com'));
+  sent.length = 0;
+  await c.candidatePatch({ jobId: job.job.id, key: job.key, candId: ap.token, patch: { stage: 'shortlist' } });
+  assert.strictEqual(sent.length, 0, 'no repeat email');
+  // opt out
+  await c.accountSave({ session: cand.session, prefs: { notify: false } });
+  assert.strictEqual((await c.accountMe({ session: cand.session })).account.prefs.notify, false);
+  await c.accountSave({ session: cand.session, prefs: { want: 'sales' } });
+  assert.strictEqual((await c.accountMe({ session: cand.session })).account.prefs.notify, false, 'saving other prefs keeps opt-out');
+  sent.length = 0;
+  await c.candidatePatch({ jobId: job.job.id, key: job.key, candId: ap.token, patch: { stage: 'pass' } });
+  await c.candidatePatch({ jobId: job.job.id, key: job.key, candId: ap.token, patch: { stage: 'shortlist' } });
+  assert.strictEqual(sent.length, 0, 'opted-out candidate gets no email');
+  // a broken mail provider never breaks the action
+  const bad = core.createCore(kv, { sendMail: async () => { throw new Error('boom'); }, origin: 'https://x' });
+  await bad.candidatePatch({ jobId: job.job.id, key: job.key, candId: ap.token, patch: { stage: 'ask' } });
+  // the applicant record never leaks the account key
+  const view = await c.candidateGet({ token: ap.token });
+  assert.ok(!JSON.stringify(view).includes('acct:'), 'account key stays private');
+  const rec = await c.candidates({ jobId: job.job.id, key: job.key });
+  assert.ok(!JSON.stringify(rec).includes('acct:'), 'recruiter view has no account key');
+
+  // providers
+  const calls = [];
+  const fakeFetch = async (url, init) => { calls.push({ url, init }); return { ok: true, json: async () => ({}) }; };
+  await mailer({ BREVO_API_KEY: 'k', MAIL_FROM: 'Scout <me@gmail.com>' }, fakeFetch)({ to: 'a@b.com', subject: 's', text: 't' });
+  assert.ok(/brevo/.test(calls[0].url) && JSON.parse(calls[0].init.body).sender.email === 'me@gmail.com');
+  await mailer({ RESEND_API_KEY: 'k', MAIL_FROM: 'me@gmail.com' }, fakeFetch)({ to: 'a@b.com', subject: 's', text: 't' });
+  assert.ok(/resend/.test(calls[1].url));
+  assert.strictEqual(mailer({ BREVO_API_KEY: 'k' }, fakeFetch), null, 'no sender, no mailer');
+  assert.strictEqual(mailer({}, fakeFetch), null);
+  const gv = googleVerifier({ GOOGLE_CLIENT_ID: 'cid' }, async () => ({ ok: true, json: async () => ({ aud: 'cid', iss: 'https://accounts.google.com', exp: String(Date.now() / 1000 + 600), email: 'a@b.com', email_verified: 'true', name: 'A' }) }));
+  assert.strictEqual((await gv('x')).verified, true);
+  const wrongAud = googleVerifier({ GOOGLE_CLIENT_ID: 'other' }, async () => ({ ok: true, json: async () => ({ aud: 'cid', iss: 'accounts.google.com', exp: String(Date.now() / 1000 + 600), email: 'a@b.com', email_verified: 'true' }) }));
+  assert.strictEqual(await wrongAud('x'), null, 'token for another site is rejected');
+  const expired = googleVerifier({ GOOGLE_CLIENT_ID: 'cid' }, async () => ({ ok: true, json: async () => ({ aud: 'cid', iss: 'accounts.google.com', exp: '1000', email: 'a@b.com', email_verified: 'true' }) }));
+  assert.strictEqual(await expired('x'), null);
+  assert.strictEqual(googleVerifier({}, fakeFetch), null);
+  console.log('Reset, Google sign-in and email tests passed.');
+})().catch((e) => { console.error(e); process.exit(1); });

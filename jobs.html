@@ -7,7 +7,7 @@
   <meta name="description" content="Upload your CV once. AI builds your profile, ranks the open roles that fit you, and you apply to the ones you pick.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%232563eb'/%3E%3Crect x='6' y='7' width='16' height='3.5' rx='1.5' fill='%23fff'/%3E%3Crect x='6' y='12.25' width='16' height='3.5' rx='1.5' fill='%23fff' fill-opacity='.7'/%3E%3Crect x='6' y='17.5' width='10' height='3.5' rx='1.5' fill='%23fff' fill-opacity='.45'/%3E%3C/svg%3E">
   <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -51,7 +51,8 @@
       </nav>
     </div>
     <div class="topbar-right">
-      <a class="btn sm" href="/hire#/new">Post a job</a>
+      <a class="btn secondary sm post-btn" href="/hire#/new">Post a job</a>
+      <a class="btn sm" href="/account" id="nav-account">Sign in</a>
     </div>
   </div>
 </header>
@@ -75,6 +76,7 @@
     <div id="apps-box" class="card pad" hidden style="margin-bottom:24px"></div>
 
     <div id="step-1">
+      <div id="saved-cv" class="card pad row between" hidden style="margin-bottom:20px"></div>
       <div class="two-col">
         <div>
           <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Choose a CV file or drop it here">
@@ -145,12 +147,12 @@
 
 <div id="apply-bar" class="apply-bar" hidden><div class="apply-bar-in"><span id="apply-count"></span><div class="row"><button type="button" class="btn ghost sm" id="btn-select-best">Select best matches</button><button type="button" class="btn lg" id="btn-apply">Apply</button></div></div></div>
 
-<footer class="footer"><p>Scout uses AI to suggest how well a CV matches a role. A person reviews every application and makes every decision. &ldquo;Not stated&rdquo; means &ldquo;verify&rdquo;, never &ldquo;reject&rdquo;. Rankings are estimates based on the applicants so far.</p></footer>
+<footer class="footer"><p>Scout uses AI to suggest how well a CV matches a role. A person reviews every application and makes every decision. &ldquo;Not stated&rdquo; means &ldquo;verify&rdquo;, never &ldquo;reject&rdquo;. Rankings are estimates based on the applicants so far. <span class="legal-links"><a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a></span></p></footer>
 
-<script src="engine.js"></script>
-<script src="core.js"></script>
-<script src="data.js"></script>
-<script src="cvtools.js"></script>
-<script src="jobs.js"></script>
+<script src="/engine.js"></script>
+<script src="/core.js"></script>
+<script src="/data.js"></script>
+<script src="/cvtools.js"></script>
+<script src="/jobs.js"></script>
 </body>
 </html>

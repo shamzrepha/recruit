@@ -476,6 +476,7 @@
     if (!key && qkey) { key = qkey; fromLink = true; }
     var job = (await call('jobGet', { id: id })).job;
     if (!key) return { id: id, job: job, key: '', cands: [], locked: true };
+    if (!job.code) { try { job.code = (await call('jobShortLink', { id: id, key: key })).code; } catch (e) { /* older job, long link still works */ } }
     var cands;
     try { cands = (await call('candidates', { jobId: id, key: key })).candidates; }
     catch (err) {
@@ -506,11 +507,10 @@
     if (tab !== 'requirements') edit = null;
     renderJob(tab, candId);
 
-    if (ui.autoScreen === id) {
-      ui.autoScreen = null;
-      var need = needsScreen();
-      if (need.length) screenCands(need);
-    }
+    // New applicants are screened automatically when the job is opened.
+    ui.autoScreen = null;
+    var need = needsScreen();
+    if (need.length && !ui.screening) screenCands(need);
   }
 
   function lockedView() {
@@ -1271,5 +1271,5 @@
   paintAsst();
 
   /* ---------------------------------------------------------------- start */
-  route();
+  ScoutData.mode().then(function () { return ScoutData.pullJobs(); }).catch(function () { /* not signed in */ }).then(route);
 })();

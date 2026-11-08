@@ -51,13 +51,13 @@
   /* ------------------------------------------------------------ my applications (this browser) */
   function myApps() { try { return JSON.parse(localStorage.getItem('scout2:myapps')) || []; } catch (e) { return []; } }
   function saveApps(a) { try { localStorage.setItem('scout2:myapps', JSON.stringify(a)); } catch (e) { /* blocked */ } }
-  function paintApps() {
-    var apps = myApps();
+  function paintApps(remote) {
+    var apps = remote && remote.length ? remote.map(function (r) { return { token: r.token, jobId: r.jobId, title: r.title, company: r.company, at: r.appliedAt, chatted: r.interviewed, label: r.statusLabel }; }) : myApps();
     var box = $('apps-box');
     if (!apps.length) { box.hidden = true; return; }
     box.hidden = false;
     box.innerHTML = '<h2 class="card-h">Your applications</h2><ul class="list">' + apps.map(function (a) {
-      return '<li><div class="list-row">' + avatar(a.company || a.title) + '<span class="lr-main"><strong>' + esc(a.title) + '</strong><small>' + esc(a.company || '') + ' &middot; applied ' + esc(ago(a.at)) + '</small></span>' +
+      return '<li><div class="list-row">' + avatar(a.company || a.title) + '<span class="lr-main"><strong>' + esc(a.title) + '</strong><small>' + esc(a.company || '') + ' &middot; applied ' + esc(ago(a.at)) + (a.label ? ' &middot; ' + esc(a.label) : '') + '</small></span>' +
         '<a class="btn secondary sm" href="/interview?token=' + encodeURIComponent(a.token) + '">' + (a.chatted ? 'View chat' : 'Short chat') + '</a></div></li>';
     }).join('') + '</ul>';
   }
@@ -133,6 +133,7 @@
     if (phone) { var n = Engine.normalizePhone(phone); if (!n.valid) { msg.textContent = 'Check your phone number: ' + n.error; phoneIn.focus(); return; } phone = n.e164; }
     st.profile.name = name; st.profile.email = $('f-email').value.trim(); st.profile.phone = phone; st.profile.location = $('f-location').value.trim();
     st.me = { name: name, email: st.profile.email, phone: phone, location: st.profile.location, want: $('f-want').value.trim(), consent: $('f-consent').checked };
+    if (ScoutData.session()) ScoutData.call('accountSave', { session: ScoutData.session(), profile: st.profile, cvText: st.text, prefs: { want: $('f-want').value.trim(), location: st.profile.location } }).catch(function () {});
     runMatch();
   });
 
@@ -264,7 +265,7 @@
         var res = await call('apply', {
           jobId: m.job.id, name: st.profile.name, cv: st.text, phone: st.me.phone, email: st.me.email, location: st.me.location,
           consent: st.me.consent, links: { linkedin: st.profile.links && st.profile.links.linkedin, github: st.profile.links && (st.profile.links.github || st.profile.links.portfolio) },
-          profile: st.profile
+          profile: st.profile, session: ScoutData.session() || undefined
         });
         ok.push({ m: m, token: res.token });
       } catch (err) { failed.push({ m: m, msg: err.message }); }
@@ -287,8 +288,16 @@
           '<a class="btn sm" href="/interview?token=' + encodeURIComponent(o.token) + '">Do the short chat</a></div></li>';
       }).join('') + '</ul><p class="hint" style="margin-top:12px">The chat is three friendly questions and is optional. It helps the recruiter get to know you.</p>' : '') +
       (a.failed.length ? '<div class="banner bad" style="margin-top:16px"><span>' + a.failed.map(function (f) { return esc(f.m.job.title) + ': ' + esc(f.msg); }).join('<br>') + '</span></div>' : '') +
+      '<div id="track-cta" class="banner info" hidden style="margin-top:20px;text-align:left"></div>' +
       '<div class="row" style="margin-top:24px"><button class="btn secondary" id="more-roles">Back to my matches</button><button class="btn ghost" id="new-cv">Use a different CV</button></div></div>';
     setStep(4);
+    ScoutData.accountsAvailable().then(function (ok) {
+      if (!ok) return;
+      var c = $('track-cta'); if (!c) return; c.hidden = false;
+      c.innerHTML = ScoutData.session()
+        ? '<span><strong>Track these applications.</strong> Your status updates appear in your account as recruiters review them.</span><a class="btn sm" href="/account">Open my account</a>'
+        : '<span><strong>Want to track these?</strong> Create a free account to see each status update, and keep your profile for next time.</span><a class="btn sm" href="/account?next=%2Fjobs#create">Create account</a>';
+    });
     $('more-roles').onclick = function () { paintMatches(); setStep(3); };
     $('new-cv').onclick = function () { st.text = ''; st.profile = null; setStep(1); };
   }
@@ -344,6 +353,29 @@
     if (e.target.closest('[data-matchme]')) showTab('match');
   });
   $('search-form').addEventListener('submit', function (e) { e.preventDefault(); q = $('q').value.trim(); loc = $('loc').value.trim(); selected = ''; paintBrowse(); });
+
+  /* ------------------------------------------------------------ account (optional) */
+  var acct = null;
+  ScoutData.me().then(function (m) {
+    acct = m;
+    if (!m) return;
+    var a = m.account;
+    paintApps(m.apps);
+    if (a.profile && a.cvText) {
+      var box = $('saved-cv'); box.hidden = false;
+      box.innerHTML = '<div class="lr-main"><strong>Welcome back, ' + esc((a.name || '').split(/\s+/)[0]) + '</strong><small>Your saved CV and profile are ready. No need to upload again.</small></div>' +
+        '<div class="row"><button type="button" class="btn" id="use-saved">Use my saved CV</button><a class="btn ghost" href="/account">My account</a></div>';
+      $('use-saved').onclick = function () {
+        st.text = a.cvText; st.profile = JSON.parse(JSON.stringify(a.profile)); st.parsedAi = true;
+        paintProfile({ ai: true, note: '' });
+        $('parse-note').textContent = 'This is your saved profile. Update anything that has changed.';
+        if (a.prefs && a.prefs.want) $('f-want').value = a.prefs.want;
+        if (a.prefs && a.prefs.location && !$('f-location').value) $('f-location').value = a.prefs.location;
+        if (a.email && !$('f-email').value) $('f-email').value = a.email;
+        setStep(2);
+      };
+    }
+  }).catch(function () {});
 
   paintApps();
   if (/^#\/?j_/.test(location.hash)) { selected = location.hash.replace(/^#\/?/, ''); showTab('browse'); $('tab-browse').click(); }

@@ -8,7 +8,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%2314213d'/%3E%3Crect x='6' y='7' width='16' height='3.5' rx='1.5' fill='%231f8f4e'/%3E%3Crect x='6' y='12.25' width='16' height='3.5' rx='1.5' fill='%23d99a1c'/%3E%3Crect x='6' y='17.5' width='10' height='3.5' rx='1.5' fill='%23f6f4ee'/%3E%3C/svg%3E">
   <link rel="preload" href="/fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
 </head>
@@ -54,7 +54,8 @@
       </nav>
     </div>
     <div class="topbar-right">
-      <a class="btn sm" href="/hire#/new">Post a job</a>
+      <a class="btn secondary sm post-btn" href="/hire#/new">Post a job</a>
+      <a class="btn sm" href="/account" id="nav-account">Sign in</a>
     </div>
   </div>
 </header>
@@ -123,12 +124,12 @@
     </section>
   </div>
 </main>
-<footer class="footer"><p>Recruiters see your CV and, only if you agree, your contact details. The AI suggests and a person decides. Nothing here is a hiring decision.</p></footer>
+<footer class="footer"><p>Recruiters see your CV and, only if you agree, your contact details. The AI suggests and a person decides. Nothing here is a hiring decision. <span class="legal-links"><a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a></span></p></footer>
 
-<script src="engine.js"></script>
-<script src="core.js"></script>
-<script src="data.js"></script>
-<script src="cvtools.js"></script>
-<script src="apply.js"></script>
+<script src="/engine.js"></script>
+<script src="/core.js"></script>
+<script src="/data.js"></script>
+<script src="/cvtools.js"></script>
+<script src="/apply.js"></script>
 </body>
 </html>

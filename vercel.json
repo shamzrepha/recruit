@@ -5,6 +5,10 @@
   "rewrites": [
     { "source": "/hire", "destination": "/hire.html" },
     { "source": "/jobs", "destination": "/jobs.html" },
+    { "source": "/account", "destination": "/account.html" },
+    { "source": "/privacy", "destination": "/privacy.html" },
+    { "source": "/terms", "destination": "/terms.html" },
+    { "source": "/a/:code", "destination": "/apply.html?code=:code" },
     { "source": "/apply", "destination": "/apply.html" },
     { "source": "/interview", "destination": "/interview.html" }
   ]

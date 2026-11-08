@@ -243,14 +243,14 @@ function fakeRes() {
   delete process.env.SCOUT_STORE;
   res = fakeRes();
   await dataHandler({ method: 'GET', query: { action: 'status' } }, res);
-  assert.deepStrictEqual(res.body, { persistent: false, store: 'memory' });
+  assert.deepStrictEqual(res.body, { persistent: false, store: 'memory', googleClientId: '', mail: false });
 
   // 4.2 With Redis configured it reports durable storage
   process.env.UPSTASH_REDIS_REST_URL = 'https://example.upstash.io';
   process.env.UPSTASH_REDIS_REST_TOKEN = 'tok';
   res = fakeRes();
   await dataHandler({ method: 'GET', query: { action: 'status' } }, res);
-  assert.deepStrictEqual(res.body, { persistent: true, store: 'redis' });
+  assert.deepStrictEqual(res.body, { persistent: true, store: 'redis', googleClientId: '', mail: false });
   delete process.env.UPSTASH_REDIS_REST_URL; delete process.env.UPSTASH_REDIS_REST_TOKEN;
 
   // 4.3 Full flow on the in-memory store used for tests

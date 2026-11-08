@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Allow: /jobs
+Allow: /hire
+Allow: /privacy
+Allow: /terms
+Disallow: /api/
+Disallow: /interview
+Disallow: /account
+Disallow: /a/

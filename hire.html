@@ -7,7 +7,7 @@
   <meta name="description" content="Post jobs, share an apply link, and review ranked applicants with the evidence from each CV.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%232563eb'/%3E%3Crect x='6' y='7' width='16' height='3.5' rx='1.5' fill='%23fff'/%3E%3Crect x='6' y='12.25' width='16' height='3.5' rx='1.5' fill='%23fff' fill-opacity='.7'/%3E%3Crect x='6' y='17.5' width='10' height='3.5' rx='1.5' fill='%23fff' fill-opacity='.45'/%3E%3C/svg%3E">
   <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body class="app-body">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -49,6 +49,7 @@
     <nav class="side-nav" aria-label="Employer dashboard">
       <a href="#/" id="nav-dash"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg> Dashboard</a>
       <a href="#/jobs" id="nav-jobs"><svg class="ic" aria-hidden="true"><use href="#i-briefcase"/></svg> Jobs <span class="count" id="nav-jobs-count"></span></a>
+      <a href="/account" id="nav-account"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg> <span id="nav-account-label">Sign in</span></a>
       <a href="#/new" id="nav-new"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg> Post a job</a>
     </nav>
 
@@ -56,6 +57,7 @@
       <div class="status-line"><span class="dot" id="store-dot"></span><span id="store-label">Checking storage&hellip;</span></div>
       <div class="status-line"><span class="dot" id="ai-dot"></span><span id="ai-label">Checking AI&hellip;</span></div>
       <a href="/" class="side-link">View public job board</a>
+      <span class="side-legal"><a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a></span>
     </div>
   </aside>
 
@@ -68,11 +70,11 @@
 <div id="asst-host"></div>
 <div class="toast-host" id="toast-host" aria-live="polite"></div>
 
-<script src="engine.js"></script>
-<script src="samples.js"></script>
-<script src="core.js"></script>
-<script src="data.js"></script>
-<script src="cvtools.js"></script>
-<script src="hire.js"></script>
+<script src="/engine.js"></script>
+<script src="/samples.js"></script>
+<script src="/core.js"></script>
+<script src="/data.js"></script>
+<script src="/cvtools.js"></script>
+<script src="/hire.js"></script>
 </body>
 </html>

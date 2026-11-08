@@ -20,6 +20,10 @@
   var DAY = 24 * 60 * 60 * 1000;
   var CANDIDATE_TTL = 30 * DAY;
   var JOB_TTL = 90 * DAY;
+  var SESSION_TTL = 30 * DAY;
+  var ACCT_TTL = 365 * DAY;
+  var CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  var STATUS_LABEL = { new: 'Received', ask: 'Under review', shortlist: 'Shortlisted', pass: 'Not selected' };
   var JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship'];
   var WORK_MODES = ['On-site', 'Hybrid', 'Remote'];
   function pick(v, list, dflt) { return list.indexOf(v) >= 0 ? v : dflt; }
@@ -91,6 +95,36 @@
     var diff = 0;
     for (var i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
     return diff === 0;
+  }
+
+  function randCode(n) {
+    var out = '';
+    while (out.length < n) {
+      var a = new Uint8Array(n * 2);
+      webcrypto().getRandomValues(a);
+      for (var i = 0; i < a.length && out.length < n; i++) if (a[i] < 248) out += CODE_CHARS.charAt(a[i] % CODE_CHARS.length);
+    }
+    return out;
+  }
+
+  function hexBytes(h) {
+    var a = new Uint8Array(h.length / 2);
+    for (var i = 0; i < a.length; i++) a[i] = parseInt(h.substr(i * 2, 2), 16);
+    return a;
+  }
+
+  async function hashPassword(password, saltHex) {
+    var c = webcrypto();
+    var key = await c.subtle.importKey('raw', new TextEncoder().encode(String(password)), 'PBKDF2', false, ['deriveBits']);
+    var bits = await c.subtle.deriveBits({ name: 'PBKDF2', salt: hexBytes(saltHex), iterations: 100000, hash: 'SHA-256' }, key, 256);
+    var a = new Uint8Array(bits), out = '';
+    for (var i = 0; i < a.length; i++) out += ('0' + a[i].toString(16)).slice(-2);
+    return out;
+  }
+
+  function cleanEmail(e) {
+    e = clip(e, 120).trim().toLowerCase();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e) ? e : '';
   }
 
   function cleanUrl(s) {
@@ -204,12 +238,20 @@
   function createCore(kv, opts) {
     opts = opts || {};
     var now = opts.now || Date.now;
+    var mail = typeof opts.sendMail === 'function' ? opts.sendMail : null;
+    var siteUrl = function () { return String((typeof opts.origin === 'function' ? opts.origin() : opts.origin) || '').replace(/\/+$/, ''); };
+    // Email never blocks or breaks the action that triggered it.
+    async function notify(to, subject, text) {
+      if (!mail || !to) return false;
+      try { await Promise.race([mail({ to: to, subject: subject, text: text }), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('mail timeout')); }, 6000); })]); return true; }
+      catch (e) { return false; }
+    }
 
     function jobPublic(j) {
       return {
         id: j.id, title: j.title, company: j.company, jd: j.jd,
         location: j.location || '', type: j.type || 'Full-time', workMode: j.workMode || 'On-site',
-        listed: j.listed !== false,
+        listed: j.listed !== false, code: j.code || '',
         requirements: j.requirements, status: j.status, createdAt: j.createdAt
       };
     }
@@ -222,13 +264,14 @@
         if (out.profile) { out.profile.phone = ''; out.profile.email = ''; }
       }
       if (out.interview) delete out.interview.transcript;
+      delete out.acct;
       return out;
     }
 
     // What a candidate may see of themselves (no recruiter notes or screening).
     function forCandidate(c) {
       var out = JSON.parse(JSON.stringify(c));
-      delete out.stage; delete out.screen; delete out.contactedAt;
+      delete out.stage; delete out.screen; delete out.contactedAt; delete out.acct;
       return out;
     }
 
@@ -252,6 +295,14 @@
     }
 
     async function saveCand(c) { await kv.set('cand:' + c.id, c, CANDIDATE_TTL); }
+
+    async function newCode(jobId) {
+      for (var i = 0; i < 8; i++) {
+        var code = randCode(6 + (i > 3 ? 1 : 0));
+        if (!(await kv.get('code:' + code))) { await kv.set('code:' + code, jobId, JOB_TTL); return code; }
+      }
+      return '';
+    }
 
     var ops = {};
 
@@ -277,6 +328,7 @@
         status: 'open',
         createdAt: new Date(now()).toISOString()
       };
+      job.code = await newCode(job.id);
       await kv.set('job:' + job.id, job, JOB_TTL);
       await kv.sadd('jobs:index', job.id);
       return { job: jobPublic(job), key: key };
@@ -334,6 +386,221 @@
       return { scores: scores };
     };
 
+    /* ---- short apply links ---- */
+
+    ops.jobByCode = async function (a) {
+      var code = clip(a.code, 12).trim().toUpperCase();
+      if (!/^[A-Z2-9]{4,10}$/.test(code)) throw fail(404, 'That apply link is not valid.');
+      var id = await kv.get('code:' + code);
+      if (!id) throw fail(404, 'That apply link was not found. It may have expired.');
+      return { job: jobPublic(await loadJob(id)) };
+    };
+
+    ops.jobShortLink = async function (a) {
+      var j = await authJob(a.id, a.key);
+      if (!j.code) { j.code = await newCode(j.id); await kv.set('job:' + j.id, j, JOB_TTL); }
+      return { code: j.code };
+    };
+
+    /* ---- accounts (optional: people can still apply without one) ---- */
+
+    async function loadAcct(session) {
+      if (!/^s_[0-9a-f]{32}$/.test(String(session || ''))) throw fail(401, 'Please sign in.');
+      var s = await kv.get('sess:' + session);
+      var a = s ? await kv.get(s.k) : null;
+      if (!a || (s.pv || 0) !== (a.pv || 0)) throw fail(401, 'Your session has expired. Please sign in again.');
+      return { a: a, k: s.k };
+    }
+    async function saveAcct(k, a) { await kv.set(k, a, ACCT_TTL); }
+    async function newSession(k, acct) { var t = 's_' + randHex(16); await kv.set('sess:' + t, { k: k, pv: (acct && acct.pv) || 0 }, SESSION_TTL); return t; }
+    function acctPublic(a) {
+      return { id: a.id, email: a.email, name: a.name, profile: a.profile || null, cvText: a.cvText || '', prefs: a.prefs || { want: '', location: '', notify: true }, hasPassword: Boolean(a.hash), google: Boolean(a.google), createdAt: a.createdAt };
+    }
+    function attachApp(a, token, jobId) {
+      a.apps = a.apps || [];
+      if (!a.apps.some(function (x) { return x.token === token; })) a.apps.unshift({ token: token, jobId: jobId, at: new Date(now()).toISOString() });
+      a.apps = a.apps.slice(0, 100);
+    }
+
+    ops.accountSignup = async function (a) {
+      var email = cleanEmail(a.email), name = clip(a.name, 80).trim();
+      var pw = String(a.password || '');
+      if (!email) throw fail(400, 'Enter a valid email address.');
+      if (!name) throw fail(400, 'Enter your name.');
+      if (pw.length < 8 || pw.length > 100) throw fail(400, 'Use a password of at least 8 characters.');
+      var k = 'acct:' + await sha256(email);
+      if (await kv.get(k)) throw fail(409, 'An account with that email already exists. Sign in instead.');
+      var salt = randHex(16);
+      var acct = { id: 'u_' + randHex(8), email: email, name: name, salt: salt, hash: await hashPassword(pw, salt), profile: null, cvText: '',
+        prefs: { want: '', location: '', notify: true }, apps: [], jobs: [], pv: 0, verified: false, createdAt: new Date(now()).toISOString() };
+      await saveAcct(k, acct);
+      return { session: await newSession(k, acct), account: acctPublic(acct) };
+    };
+
+    ops.accountLogin = async function (a) {
+      var email = cleanEmail(a.email), pw = String(a.password || '').slice(0, 100);
+      var k = 'acct:' + await sha256(email || 'none');
+      var fk = 'fail:' + k;
+      var fails = (await kv.get(fk)) || 0;
+      if (fails >= 8) throw fail(429, 'Too many wrong attempts. Try again in 15 minutes.');
+      var acct = email ? await kv.get(k) : null;
+      var got = await hashPassword(pw, acct ? acct.salt : '00'.repeat(16));
+      if (!acct || !acct.hash || !sameText(got, acct.hash)) {
+        await kv.set(fk, fails + 1, 15 * 60 * 1000);
+        throw fail(401, 'Email or password is wrong.');
+      }
+      await kv.del(fk);
+      return { session: await newSession(k, acct), account: acctPublic(acct) };
+    };
+
+    ops.accountLogout = async function (a) {
+      if (/^s_[0-9a-f]{32}$/.test(String(a.session || ''))) await kv.del('sess:' + a.session);
+      return { ok: true };
+    };
+
+    ops.accountMe = async function (a) {
+      var u = await loadAcct(a.session), acct = u.a, dirty = false;
+      var apps = [];
+      for (var i = 0; i < (acct.apps || []).length && i < 50; i++) {
+        var ap = acct.apps[i];
+        var c = await kv.get('cand:' + ap.token);
+        if (!c) { acct.apps.splice(i, 1); i--; dirty = true; continue; }
+        var job = await kv.get('job:' + c.jobId);
+        apps.push({
+          token: c.id, jobId: c.jobId, title: job ? job.title : 'Role no longer listed', company: job ? job.company : '',
+          open: job ? job.status === 'open' : false, appliedAt: c.createdAt, expiresAt: c.expiresAt,
+          status: c.stage || 'new', statusLabel: STATUS_LABEL[c.stage] || 'Received', interviewed: Boolean(c.interview)
+        });
+      }
+      var jobs = [];
+      for (var j = 0; j < (acct.jobs || []).length; j++) {
+        var jb = await kv.get('job:' + acct.jobs[j].id);
+        if (!jb) { acct.jobs.splice(j, 1); j--; dirty = true; continue; }
+        var ids = await kv.smembers('jobcands:' + jb.id);
+        jobs.push({ id: jb.id, key: acct.jobs[j].key, title: jb.title, company: jb.company, status: jb.status, code: jb.code || '', createdAt: jb.createdAt, applicants: ids.length });
+      }
+      if (dirty) await saveAcct(u.k, acct);
+      return { account: acctPublic(acct), apps: apps, jobs: jobs };
+    };
+
+    ops.accountSave = async function (a) {
+      var u = await loadAcct(a.session), acct = u.a;
+      if (a.name != null) { var n = clip(a.name, 80).trim(); if (n) acct.name = n; }
+      if (a.profile != null) acct.profile = cleanProfile(a.profile);
+      if (a.cvText != null) acct.cvText = clip(a.cvText, 12000);
+      if (a.prefs && typeof a.prefs === 'object') var old = acct.prefs || {};
+        acct.prefs = {
+          want: a.prefs.want != null ? clip(a.prefs.want, 120).trim() : (old.want || ''),
+          location: a.prefs.location != null ? clip(a.prefs.location, 80).trim() : (old.location || ''),
+          notify: a.prefs.notify != null ? a.prefs.notify !== false : old.notify !== false
+        };
+      await saveAcct(u.k, acct);
+      return { account: acctPublic(acct) };
+    };
+
+    ops.accountAttach = async function (a) {
+      var u = await loadAcct(a.session), acct = u.a, n = 0;
+      var tokens = (Array.isArray(a.tokens) ? a.tokens : []).slice(0, 50);
+      for (var i = 0; i < tokens.length; i++) {
+        var c = await kv.get('cand:' + clip(tokens[i], 60));
+        if (c) { attachApp(acct, c.id, c.jobId); n++; }
+      }
+      await saveAcct(u.k, acct);
+      return { attached: n };
+    };
+
+    ops.accountSyncJobs = async function (a) {
+      var u = await loadAcct(a.session), acct = u.a;
+      acct.jobs = acct.jobs || [];
+      var list = (Array.isArray(a.jobs) ? a.jobs : []).slice(0, 50);
+      for (var i = 0; i < list.length; i++) {
+        try {
+          var jb = await authJob(list[i].id, list[i].key);
+          if (!acct.jobs.some(function (x) { return x.id === jb.id; })) acct.jobs.unshift({ id: jb.id, key: String(list[i].key) });
+          if (jb.owner !== u.k) { jb.owner = u.k; await kv.set('job:' + jb.id, jb, JOB_TTL); }
+        } catch (e) { /* ignore keys that do not match */ }
+      }
+      acct.jobs = acct.jobs.slice(0, 100);
+      await saveAcct(u.k, acct);
+      return { count: acct.jobs.length };
+    };
+
+    ops.accountDelete = async function (a) {
+      var u = await loadAcct(a.session);
+      if (u.a.hash) {
+        var got = await hashPassword(String(a.password || '').slice(0, 100), u.a.salt);
+        if (!sameText(got, u.a.hash)) throw fail(403, 'That password is not right.');
+      }
+      await kv.del(u.k);
+      await kv.del('sess:' + a.session);
+      return { deleted: true };
+    };
+
+    /* ---- forgot password, Google sign-in ---- */
+
+    ops.accountForgot = async function (a) {
+      var email = cleanEmail(a.email);
+      var configured = Boolean(mail);
+      if (!email) throw fail(400, 'Enter a valid email address.');
+      if (!configured) return { sent: false, configured: false };
+      var k = 'acct:' + await sha256(email);
+      var tries = (await kv.get('forgot:' + k)) || 0;
+      if (tries >= 3) throw fail(429, 'Too many reset requests. Try again in an hour.');
+      await kv.set('forgot:' + k, tries + 1, 60 * 60 * 1000);
+      var acct = await kv.get(k);
+      if (acct) {
+        var token = 'r_' + randHex(16);
+        await kv.set('reset:' + await sha256(token), k, 30 * 60 * 1000);
+        var link = siteUrl() + '/account?reset=' + token;
+        await notify(email, 'Reset your Scout password',
+          'Hi ' + acct.name + ',\n\nUse this link to choose a new password. It works for 30 minutes:\n' + link + '\n\nIf you did not ask for this, ignore this email. Your password stays the same.');
+      }
+      // Same answer whether or not the account exists, so emails cannot be probed.
+      return { sent: true, configured: true };
+    };
+
+    ops.accountReset = async function (a) {
+      var token = String(a.token || '');
+      var pw = String(a.password || '');
+      if (!/^r_[0-9a-f]{32}$/.test(token)) throw fail(400, 'This reset link is not valid.');
+      if (pw.length < 8 || pw.length > 100) throw fail(400, 'Use a password of at least 8 characters.');
+      var th = await sha256(token);
+      var k = await kv.get('reset:' + th);
+      var acct = k ? await kv.get(k) : null;
+      if (!acct) throw fail(400, 'This reset link has expired. Ask for a new one.');
+      acct.salt = randHex(16);
+      acct.hash = await hashPassword(pw, acct.salt);
+      acct.pv = (acct.pv || 0) + 1;       // signs out every other device
+      acct.verified = true;               // they proved they own the email
+      await saveAcct(k, acct);
+      await kv.del('reset:' + th);
+      await kv.del('fail:' + k);
+      return { session: await newSession(k, acct), account: acctPublic(acct) };
+    };
+
+    ops.accountGoogle = async function (a) {
+      if (typeof opts.verifyGoogle !== 'function') throw fail(503, 'Google sign-in is not switched on for this site.');
+      var g;
+      try { g = await opts.verifyGoogle(String(a.credential || '')); } catch (e) { g = null; }
+      var email = g && g.verified ? cleanEmail(g.email) : '';
+      if (!email) throw fail(401, 'Google could not confirm that account. Try again.');
+      var k = 'acct:' + await sha256(email);
+      var acct = await kv.get(k);
+      if (!acct) {
+        acct = { id: 'u_' + randHex(8), email: email, name: clip(g.name || email.split('@')[0], 80), salt: '', hash: '', google: true, profile: null, cvText: '',
+          prefs: { want: '', location: '', notify: true }, apps: [], jobs: [], pv: 0, verified: true, createdAt: new Date(now()).toISOString() };
+      } else {
+        acct.google = true;
+        if (acct.verified === false) {
+          // Someone may have registered this email without owning it. Google proves ownership, so
+          // remove any password set before and sign out every old session.
+          acct.salt = ''; acct.hash = ''; acct.pv = (acct.pv || 0) + 1; acct.verified = true;
+        }
+      }
+      await saveAcct(k, acct);
+      return { session: await newSession(k, acct), account: acctPublic(acct) };
+    };
+
     /* ---- candidate side ---- */
 
     ops.apply = async function (a) {
@@ -366,6 +633,24 @@
       };
       await saveCand(c);
       await kv.sadd('jobcands:' + job.id, c.id);
+      if (a.session) {
+        try {
+          var u = await loadAcct(a.session); attachApp(u.a, c.id, job.id); await saveAcct(u.k, u.a);
+          c.acct = u.k; await saveCand(c);
+          if (u.a.prefs && u.a.prefs.notify !== false) await notify(u.a.email, 'Application received: ' + job.title,
+            'Hi ' + u.a.name + ',\n\nYour application for ' + job.title + (job.company ? ' at ' + job.company : '') + ' was received. Follow its status in your account:\n' + siteUrl() + '/account\n\nA person reviews every application.');
+        } catch (e) { /* applying works without an account */ }
+      }
+      if (job.owner) {
+        try {
+          var owner = await kv.get(job.owner);
+          if (owner && (!owner.prefs || owner.prefs.notify !== false)) {
+            var n = (await kv.smembers('jobcands:' + job.id)).length;
+            if (n <= 5 || n % 10 === 0) await notify(owner.email, 'New applicant for ' + job.title,
+              'Someone applied for ' + job.title + ' (' + n + ' applicant' + (n === 1 ? '' : 's') + ' so far). Open your dashboard to see them ranked:\n' + siteUrl() + '/hire');
+          }
+        } catch (e) { /* never block an application */ }
+      }
       return { token: c.id, expiresAt: c.expiresAt };
     };
 
@@ -460,7 +745,16 @@
       p = p || {};
       if (p.stage != null) {
         if (STAGES.indexOf(p.stage) < 0) throw fail(400, 'Unknown stage.');
+        var before = c.stage;
         c.stage = p.stage;
+        if (p.stage === 'shortlist' && before !== 'shortlist' && c.acct) {
+          try {
+            var ua = await kv.get(c.acct);
+            var jb2 = await kv.get('job:' + c.jobId);
+            if (ua && (!ua.prefs || ua.prefs.notify !== false)) await notify(ua.email, 'Good news: you were shortlisted' + (jb2 ? ' for ' + jb2.title : ''),
+              'Hi ' + ua.name + ',\n\nThe recruiter shortlisted your application' + (jb2 ? ' for ' + jb2.title : '') + '. They may contact you soon. Follow it in your account:\n' + siteUrl() + '/account');
+          } catch (e) { /* notification is best effort */ }
+        }
       }
       if (p.contactedAt !== undefined) c.contactedAt = p.contactedAt ? clip(p.contactedAt, 40) : null;
       if (p.screen !== undefined) c.screen = cleanScreen(p.screen);
@@ -506,7 +800,7 @@
     memoryKV: memoryKV,
     localKV: localKV,
     upstashKV: upstashKV,
-    OPS: ['jobCreate', 'jobGet', 'jobsOpen', 'jobScores', 'jobUpdate', 'apply', 'candidateGet', 'interviewSave', 'candidateDelete',
+    OPS: ['accountForgot', 'accountReset', 'accountGoogle', 'jobByCode', 'jobShortLink', 'accountSignup', 'accountLogin', 'accountLogout', 'accountMe', 'accountSave', 'accountAttach', 'accountSyncJobs', 'accountDelete', 'jobCreate', 'jobGet', 'jobsOpen', 'jobScores', 'jobUpdate', 'apply', 'candidateGet', 'interviewSave', 'candidateDelete',
       'candidates', 'candidateAdd', 'candidatePatch', 'screensSave', 'candidateRemove'],
     STAGES: STAGES,
     CANDIDATE_TTL: CANDIDATE_TTL

@@ -12,6 +12,12 @@ After applying, candidates can do a 3-question chat, written like a recruiter wo
 
 Rankings are estimates. The "top X%" uses the anonymous scores of people who applied so far and shows only when at least 3 have applied.
 
+## Accounts and short links
+
+- **Short apply links**: every job gets a code, so the link to share is `https://your-site/a/K7X3QP`. Older jobs get a code the first time the recruiter opens them.
+- **Optional accounts** (`/account`, needs shared storage): job seekers keep their profile and saved CV, see each application's status (Received, Under review, Shortlisted, Not selected) and can withdraw; employers get their jobs on every device. Passwords are salted PBKDF2 hashes, 8 wrong attempts lock sign-in for 15 minutes, sessions last 30 days. Applying without an account still works.
+- **Screening**: new applicants are screened by AI automatically when a recruiter opens the job (keyword matching if there is no `GROQ_API_KEY`).
+
 ## Storage: read this before demoing
 
 - **Without setup**: data is saved in the browser (localStorage). Applicant and recruiter must use the same browser. Fine for a recorded demo.
@@ -44,3 +50,18 @@ SCOUT_STORE=memory-persistent npm run test:browser          # shared-storage mod
 Pages are static HTML/CSS/JS plus Vercel functions in `api/`. `_src/` holds page sources; run `python3 _src/build.py` after editing them (or edit the built `.html` directly). `core.js` holds every rule and runs on both server and browser.
 
 Not covered by tests: live Groq calls, vision OCR, PDF text extraction, and Upstash itself.
+
+
+## Google sign-in, password reset and emails
+
+All optional. The site works without them; each one switches on when its settings exist in Vercel > Settings > Environment Variables.
+
+| What | Settings | Notes |
+| --- | --- | --- |
+| Sign in with Google | `GOOGLE_CLIENT_ID` | Google Cloud Console > APIs & Services > Credentials > Create OAuth client ID > Web application. Under "Authorized JavaScript origins" add your site address (for example `https://your-site.vercel.app`). Paste the Client ID. |
+| Emails (reset link, "shortlisted", "new applicant") | `BREVO_API_KEY` + `MAIL_FROM`, or `RESEND_API_KEY` + `MAIL_FROM` | Brevo lets you send from one verified address (a Gmail works) and is free for 300 a day. Resend only emails other people after you verify a domain. |
+| Links inside emails | `SITE_URL` | Your public address, no trailing slash. |
+
+Without email settings the "Forgot your password?" link is hidden. Without a Google Client ID the Google button is hidden. After changing settings, redeploy.
+
+Accounts also need the Upstash Redis storage connected (see above). Privacy and Terms pages are `/privacy` and `/terms`; add a contact email there if you want people to reach you.

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy - Scout</title>
+  <meta name="description" content="What Scout stores, who sees it, and how to delete it.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%232563eb'/%3E%3Crect x='6' y='7' width='16' height='3.5' rx='1.5' fill='%23fff'/%3E%3Crect x='6' y='12.25' width='16' height='3.5' rx='1.5' fill='%23fff' fill-opacity='.7'/%3E%3Crect x='6' y='17.5' width='10' height='3.5' rx='1.5' fill='%23fff' fill-opacity='.45'/%3E%3C/svg%3E">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<!--SPRITE-->
+<!--TOPBAR-->
+<main class="page narrow legal">
+  <p class="eyebrow">Privacy</p>
+  <h1>Your data, in plain words</h1>
+  <p class="sub">Scout helps people apply for jobs and helps employers read applications. This page says what is kept and who can see it.</p>
+
+  <h2>What Scout keeps</h2>
+  <ul>
+    <li><strong>When you apply:</strong> your CV text, the profile Scout builds from it, your answers to the short chat, and your contact details only if you tick the box to share them.</li>
+    <li><strong>When you create an account:</strong> your name, email, a salted hash of your password (never the password itself), your saved profile and CV, and the list of your applications and jobs. If you use Google sign-in, Scout receives your name and verified email from Google, nothing else.</li>
+    <li><strong>When you post a job:</strong> the role, its requirements and a private key that lets you manage it.</li>
+  </ul>
+
+  <h2>Who can see it</h2>
+  <ul>
+    <li>A recruiter sees your CV, your profile and the match results for the role you applied to. They see your contact details only if you agreed. They never see the chat transcript, only a short summary.</li>
+    <li>Other job seekers see nothing about you.</li>
+    <li>Your CV text is sent to an AI service (Groq) to build your profile, check the match and run the chat. It is used only to produce your result.</li>
+    <li>Data is stored with our storage provider (Upstash Redis) and the site runs on Vercel. Emails, when switched on, go through an email provider (Brevo or Resend).</li>
+  </ul>
+
+  <h2>How long it is kept</h2>
+  <ul>
+    <li>Applications: 30 days, then deleted automatically.</li>
+    <li>Jobs: 90 days, then deleted automatically.</li>
+    <li>Accounts: deleted after a year of no sign-in, or at once when you delete the account.</li>
+  </ul>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li><strong>Withdraw an application</strong> from your account page, or with the private link you got when you applied. The recruiter stops seeing it.</li>
+    <li><strong>Delete your account</strong> from the account page.</li>
+    <li><strong>Turn off emails</strong> in your account page.</li>
+    <li>Applying never needs an account.</li>
+  </ul>
+
+  <h2>Decisions are made by people</h2>
+  <p>The AI gives a suggestion and shows its evidence from your CV. It does not accept or reject anyone. If something is marked &ldquo;not stated&rdquo;, it means the recruiter should check, not that you were turned down.</p>
+
+  <h2>Cookies</h2>
+  <p>Scout does not use advertising or tracking cookies. It saves a sign-in token and your recent applications in your own browser so the site can remember you. Google sign-in loads a script from Google when you open the sign-in form.</p>
+
+  <p class="muted">Questions or deletion requests that you cannot do yourself: contact the person or company that shared this site with you.</p>
+</main>
+<footer class="footer"><p>Scout uses AI to suggest. A person decides.</p></footer>
+<script src="/data.js" defer></script>
+</body>
+</html>

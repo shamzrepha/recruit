@@ -17,6 +17,7 @@
  */
 
 const core = require('../core.js');
+const { mailer, googleVerifier } = require('../lib/mail.js');
 
 let memory = null;
 
@@ -41,7 +42,11 @@ module.exports = async (req, res) => {
   const s = getStore();
 
   if (req.method === 'GET' && action === 'status') {
-    return res.status(200).json({ persistent: s.persistent, store: s.store });
+    return res.status(200).json({
+      persistent: s.persistent, store: s.store,
+      googleClientId: googleVerifier() ? String(process.env.GOOGLE_CLIENT_ID).trim() : '',
+      mail: Boolean(mailer())
+    });
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST.' });
@@ -51,7 +56,11 @@ module.exports = async (req, res) => {
   if (!body || typeof body !== 'object') return res.status(400).json({ error: 'Invalid JSON request body.' });
 
   try {
-    const ops = core.createCore(s.kv);
+    const host = req.headers && (req.headers['x-forwarded-host'] || req.headers.host);
+    const proto = (req.headers && req.headers['x-forwarded-proto']) || 'https';
+    // SITE_URL wins so links in emails cannot be steered by a forged Host header.
+    const origin = process.env.SITE_URL || (host ? proto + '://' + host : '');
+    const ops = core.createCore(s.kv, { sendMail: mailer(), verifyGoogle: googleVerifier(), origin: origin });
     const result = await ops[action](body);
     return res.status(200).json(result);
   } catch (err) {

@@ -1,5 +1,7 @@
 node_modules
 .env
 .env.*
+!.env.example
 .vercel
-test/screenshots/debug.png
+test/screenshots/
+data/store.json

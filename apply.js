@@ -4,6 +4,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var params = new URLSearchParams(location.search);
   var jobId = params.get('job') || '';
+  var codeM = location.pathname.match(/^\/a\/([A-Za-z0-9]+)/);
+  var code = codeM ? codeM[1] : (params.get('code') || '');
   var snap = params.get('s') ? ScoutData.readSnapshot(params.get('s')) : null;
   var job = null;
   var currentImageBase64 = null;
@@ -45,10 +47,11 @@
   });
 
   async function init() {
-    if (!jobId) { stateCard('This link is incomplete', 'It does not say which job you are applying for. Ask the recruiter to send the apply link again.'); return; }
+    if (!jobId && !code) { stateCard('This link is incomplete', 'It does not say which job you are applying for. Ask the recruiter to send the apply link again.'); return; }
     var mode = await ScoutData.mode();
     try {
-      job = (await ScoutData.call('jobGet', { id: jobId })).job;
+      job = (await (jobId ? ScoutData.call('jobGet', { id: jobId }) : ScoutData.call('jobByCode', { code: code }))).job;
+      jobId = job.id;
     } catch (err) {
       if (mode === 'local' && snap) {
         paintRole(snap);
@@ -152,8 +155,14 @@
         jobId: jobId, name: name, cv: cvText, phone: e164, email: $('f-email').value.trim(),
         location: $('f-location').value.trim(), consent: $('f-consent').checked,
         links: { linkedin: $('f-linkedin').value.trim(), github: $('f-github').value.trim() },
-        profile: currentProfile ? Object.assign({}, currentProfile, { name: name }) : undefined
+        profile: currentProfile ? Object.assign({}, currentProfile, { name: name }) : undefined,
+        session: ScoutData.session() || undefined
       });
+      try {
+        var mine = JSON.parse(localStorage.getItem('scout2:myapps')) || [];
+        mine.unshift({ token: res.token, jobId: jobId, title: job.title, company: job.company, at: new Date().toISOString() });
+        localStorage.setItem('scout2:myapps', JSON.stringify(mine));
+      } catch (e2) { /* storage blocked */ }
       showSuccess(res.token);
       showFit(cvText);
     } catch (err) {

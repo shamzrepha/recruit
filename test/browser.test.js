@@ -216,7 +216,7 @@ const CV = [
     await cand.waitForSelector('.job-card');
     await cand.click('.job-card >> nth=0');
     await cand.waitForSelector('.jd');
-    assert.ok((await cand.getAttribute('.jd-apply a.btn', 'href')).includes('/apply?job='));
+    assert.ok(/^\/a\/[A-Z2-9]{6,7}$/.test(await cand.getAttribute('.jd-apply a.btn', 'href')), 'browse apply link is short');
     await cand.screenshot({ path: path.join(SHOTS, `13-browse-${TAG}.png`) });
 
     /* ---- apply link page ---- */
@@ -229,13 +229,141 @@ const CV = [
     await cand.waitForSelector('#success-section:not([hidden])', { timeout: 15000 });
     await cand.screenshot({ path: path.join(SHOTS, `14-apply-done-${TAG}.png`), fullPage: true });
 
+    /* ---- short apply link ---- */
+    await page.goto(BASE + '/hire#/jobs', { waitUntil: 'networkidle' });
+    await page.locator('.table tr.click', { hasText: 'Backend' }).first().click();
+    await page.waitForSelector('.kcard');
+    await page.click('.tabs-line a:has-text("Share")');
+    await page.waitForSelector('.link-box code');
+    const shortLink = (await page.locator('.link-box code').first().textContent()).trim();
+    assert.ok(/\/a\/[A-HJKMNP-Z2-9]{6,7}$/.test(shortLink), 'apply link is short: ' + shortLink);
+    assert.ok(shortLink.length < 50, 'short enough to type');
+    const shortPage = await ctx.newPage();
+    watch(shortPage);
+    await shortPage.goto(shortLink.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'networkidle' });
+    await shortPage.waitForSelector('#a-title');
+    assert.ok(/Backend/i.test(await shortPage.textContent('#a-title')), 'short link opens the role page');
+    await shortPage.close();
+
+    /* ---- accounts (need shared storage) ---- */
+    if (REMOTE) {
+      const uctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+      const u = await uctx.newPage();
+      watch(u);
+      await u.goto(BASE + '/account', { waitUntil: 'networkidle' });
+      await u.waitForSelector('#auth-form');
+      await u.click('[data-tab="create"]');
+      await u.fill('#a-name', 'Tola Bello');
+      await u.fill('#a-email', 'tola@example.com');
+      await u.fill('#a-pw', 'short');
+      await u.click('#a-go');
+      await u.waitForFunction(() => /8 characters/.test(document.querySelector('#a-msg').textContent), null, { timeout: 8000 });
+      await u.fill('#a-pw', 'a-good-password');
+      await u.click('#a-go');
+      await u.waitForSelector('.acct-head h1');
+      assert.strictEqual(await u.textContent('.acct-head h1'), 'Tola Bello');
+      assert.ok((await u.textContent('#acct')).includes('No applications yet'));
+      await u.screenshot({ path: path.join(SHOTS, `16-account-empty-${TAG}.png`) });
+
+      await u.goto(BASE + '/jobs', { waitUntil: 'networkidle' });
+      await u.click('#btn-paste');
+      await u.fill('#paste-cv', CV);
+      await u.click('#btn-use-paste');
+      await u.waitForSelector('#step-2:not([hidden]) .profile');
+      await u.fill('#f-name', 'Tola Bello');
+      await u.fill('#f-want', 'backend engineer');
+      await u.click('#profile-form button[type="submit"]');
+      await u.waitForSelector('.match-card', { timeout: 30000 });
+      await u.check('.match-card >> nth=0 >> input[data-pick]');
+      await u.click('#btn-apply');
+      await u.waitForSelector('#step-4 .done-card');
+      assert.ok((await u.textContent('#track-cta')).includes('account'), 'tracking prompt shown');
+
+      await u.goto(BASE + '/account', { waitUntil: 'networkidle' });
+      await u.waitForSelector('.app-card');
+      assert.ok((await u.textContent('.app-card')).includes('Received'), 'status starts as Received');
+      await u.screenshot({ path: path.join(SHOTS, `17-account-apps-${TAG}.png`), fullPage: true });
+
+      // the recruiter shortlists Tola; her account shows it
+      await page.goto(BASE + '/hire#/jobs', { waitUntil: 'networkidle' });
+      await page.locator('.table tr.click', { hasText: 'Backend' }).first().click();
+      await page.waitForSelector('.kcard:has-text("Tola Bello")');
+      await page.locator('.kcard', { hasText: 'Tola Bello' }).click();
+      await page.waitForSelector('.drawer [data-act="stage"]');
+      await page.click('.drawer [data-act="stage"][data-stage="shortlist"]');
+      await page.waitForTimeout(600);
+      await page.keyboard.press('Escape');
+      await u.reload({ waitUntil: 'networkidle' });
+      await u.waitForSelector('.app-card');
+      assert.ok((await u.textContent('.app-card .chip')).includes('Shortlisted'), 'status follows the recruiter: ' + await u.textContent('.app-card .chip'));
+      assert.ok(!/stage|screen|score/i.test(await u.textContent('.app-card')), 'no recruiter internals shown');
+
+      // saved CV is offered next time, and sign-out / sign-in works
+      await u.goto(BASE + '/jobs', { waitUntil: 'networkidle' });
+      await u.waitForSelector('#use-saved');
+      await u.click('#use-saved');
+      await u.waitForSelector('#step-2:not([hidden]) .profile');
+      assert.strictEqual(await u.inputValue('#f-name'), 'Tola Bello');
+      await u.goto(BASE + '/account', { waitUntil: 'networkidle' });
+      await u.click('#signout');
+      await u.waitForSelector('#auth-form');
+      await u.fill('#a-email', 'tola@example.com');
+      await u.fill('#a-pw', 'wrong-password');
+      await u.click('#a-go');
+      await u.waitForFunction(() => /wrong/.test(document.querySelector('#a-msg').textContent), null, { timeout: 8000 });
+      await u.fill('#a-pw', 'a-good-password');
+      await u.click('#a-go');
+      await u.waitForSelector('.app-card');
+
+      // employer: signing in on a new device brings the jobs along
+      const e2 = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+      const ep = await e2.newPage();
+      watch(ep);
+      await ep.goto(BASE + '/account', { waitUntil: 'networkidle' });
+      await ep.click('[data-tab="create"]');
+      await ep.fill('#a-name', 'Boss');
+      await ep.fill('#a-email', 'boss@example.com');
+      await ep.fill('#a-pw', 'boss-password-1');
+      await ep.click('#a-go');
+      await ep.waitForSelector('.acct-head');
+      assert.ok(!(await ep.textContent('#acct')).includes('Jobs I manage'), 'no jobs on a new account');
+      await e2.close();
+      await uctx.close();
+    }
+
+    /* ---- employer job tabs at phone width (regression: Share tab overflowed) ---- */
+    await page.goto(BASE + '/hire#/jobs', { waitUntil: 'networkidle' });
+    await page.locator('.table tr.click', { hasText: 'Backend' }).first().click();
+    await page.waitForSelector('.kcard');
+    const jobHash = await page.evaluate(() => location.hash.split('/').slice(0, 3).join('/'));
+    await page.setViewportSize({ width: 390, height: 800 });
+    for (const tabName of ['applicants', 'insights', 'requirements', 'share']) {
+      await page.goto(BASE + '/hire' + jobHash + '/' + tabName, { waitUntil: 'networkidle' });
+      await page.waitForSelector('.tabs-line');
+      assert.ok((await overflow(page)) <= 1, 'no horizontal overflow on job tab ' + tabName + ' (' + (await overflow(page)) + 'px)');
+    }
+    await page.screenshot({ path: path.join(SHOTS, `18-phone-share-${TAG}.png`), fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 800 });
+
     /* ---- phone width ---- */
     const phone = await browser.newContext({ viewport: { width: 390, height: 800 }, deviceScaleFactor: 2 });
     const pp = await phone.newPage();
     watch(pp);
-    for (const u of ['/', '/jobs', '/interview?token=none', '/apply?job=none']) {
+    for (const u of ['/', '/jobs', '/account', '/interview?token=none', '/apply?job=none', '/a/ABCDEF', '/privacy', '/terms', '/account?reset=r_' + 'a'.repeat(32)]) {
       await pp.goto(BASE + u, { waitUntil: 'networkidle' });
       assert.ok((await overflow(pp)) <= 1, 'no horizontal overflow at 390px on ' + u + ' (' + (await overflow(pp)) + ')');
+    }
+    await pp.goto(BASE + '/privacy', { waitUntil: 'networkidle' });
+    assert.ok(/Your data, in plain words/.test(await pp.textContent('h1')));
+    assert.ok(await pp.locator('.footer .legal-links a[href="/terms"]').count() === 1, 'footer links to terms');
+    await pp.screenshot({ path: path.join(SHOTS, `19-phone-privacy-${TAG}.png`), fullPage: true });
+    if (TAG === 'shared') {
+      await pp.goto(BASE + '/account?reset=r_' + 'a'.repeat(32), { waitUntil: 'networkidle' });
+      await pp.waitForSelector('#reset-form');
+      await pp.fill('#r-pw', 'a-new-password');
+      await pp.click('#a-go');
+      await pp.waitForFunction(() => /expired/.test(document.querySelector('#a-msg').textContent), null, { timeout: 8000 });
+      await pp.screenshot({ path: path.join(SHOTS, `20-phone-reset-${TAG}.png`), fullPage: true });
     }
     await pp.goto(BASE + '/jobs', { waitUntil: 'networkidle' });
     await pp.screenshot({ path: path.join(SHOTS, `15-phone-jobs-${TAG}.png`), fullPage: true });
