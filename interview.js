@@ -102,7 +102,7 @@
     var answered = transcript.filter(function (t) { return t.role === 'candidate' && t.text !== '(skipped)'; });
     var data;
     if (!answered.length) {
-      data = { summary: 'The candidate did not answer any questions in the AI chat.', confirmedReqs: [], openReqs: [], followUpQuestions: [], confidence: 'low' };
+      data = { summary: 'The candidate did not answer any questions in the short chat.', confirmedReqs: [], openReqs: [], followUpQuestions: [], confidence: 'low' };
     } else {
       try { data = await post('summarize', { role: job.title, requirements: reqs(), cv: candidate.cv, transcript: transcript }); }
       catch (err) {

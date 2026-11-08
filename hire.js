@@ -37,7 +37,7 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
   function uid() { return 'r_' + Date.now().toString(36) + (++seq); }
-  function newDraft() { return { step: 1, mode: 'chat', title: '', company: '', location: '', type: 'Full-time', workMode: 'On-site', listed: true, jd: '', reqs: [], chat: [], note: '', busy: false }; }
+  function newDraft() { return { step: 1, mode: 'paste', title: '', company: '', location: '', type: 'Full-time', workMode: 'On-site', listed: true, jd: '', reqs: [], chat: [], note: '', busy: false }; }
   function fmtDate(iso) {
     var d = new Date(iso);
     return isNaN(d) ? '' : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
@@ -179,9 +179,9 @@
   }
 
   function emptyJobs() {
-    return '<div class="empty-state"><div class="empty-ic">' + icon('briefcase') + '</div><h2>Post your first job</h2>' +
+    return '<div class="empty-state"><div class="empty-ic">' + icon('briefcase') + '</div><h2>Upload your first job</h2>' +
       '<p>Create a role, share its apply link, and applicants show up here in a pipeline, ranked against your requirements. Want to see it working first? Load sample jobs with made-up applicants.</p>' +
-      '<div class="row"><a class="btn lg" href="#/new">Post a job</a><button class="btn secondary lg" data-act="sample">Load sample jobs</button></div></div>';
+      '<div class="row"><a class="btn lg" href="#/new">Upload a job</a><button class="btn secondary lg" data-act="sample">Load sample jobs</button></div></div>';
   }
 
   async function dashboardView(my) {
@@ -219,7 +219,7 @@
     }).join('');
 
     view.innerHTML =
-      '<div class="page-title"><div><h1>Dashboard</h1><p class="sub">Your hiring at a glance.</p></div><a class="btn" href="#/new">' + icon('plus') + ' Post a job</a></div>' +
+      '<div class="page-title"><div><h1>Dashboard</h1><p class="sub">Your candidate analysis at a glance.</p></div><a class="btn" href="#/new">' + icon('plus') + ' Upload a job</a></div>' +
       '<div class="stat-grid">' + stats.map(function (s2) {
         return '<div class="stat"><span class="stat-ic">' + icon(s2[2]) + '</span><div><div class="stat-n">' + s2[1] + '</div><div class="stat-l">' + s2[0] + '</div></div></div>';
       }).join('') + '</div>' +
@@ -232,7 +232,7 @@
   async function jobsListView(my) {
     cache = null;
     var head = '<div class="page-title"><div><h1>Jobs</h1><p class="sub">Each job has its own apply link and its own pipeline.</p></div>' +
-      '<div class="row"><button class="btn secondary" data-act="sample">Load sample jobs</button><a class="btn" href="#/new">' + icon('plus') + ' Post a job</a></div></div>';
+      '<div class="row"><button class="btn secondary" data-act="sample">Load sample jobs</button><a class="btn" href="#/new">' + icon('plus') + ' Upload a job</a></div></div>';
     if (!ScoutData.myJobs().length) { view.innerHTML = '<div class="page-title"><h1>Jobs</h1></div>' + emptyJobs(); return; }
     view.innerHTML = head + '<p class="muted">Loading&hellip;</p>';
     var rows = await loadPortfolio();
@@ -286,14 +286,14 @@
     var steps = '<ol class="steps" aria-label="Steps">' +
       '<li class="' + (d.step === 1 ? 'current' : 'done') + '">Describe the role</li><li class="sep" aria-hidden="true" style="width:32px;height:1px;background:var(--line-strong)"></li>' +
       '<li class="' + (d.step === 2 ? 'current' : '') + '">Review and create</li></ol>';
-    var head = '<div class="page-title"><div><a class="crumb" href="#/jobs">' + icon('arrow-left') + ' Jobs</a><h1>Post a job</h1></div></div>';
+    var head = '<div class="page-title"><div><a class="crumb" href="#/jobs">' + icon('arrow-left') + ' Jobs</a><h1>Upload a job</h1></div></div>';
 
     if (d.step === 1) {
       view.innerHTML = head + steps +
         '<div class="wizard"><div>' +
           '<div class="mode-switch" role="group" aria-label="How do you want to start?">' +
-            '<button type="button" data-act="wiz-mode" data-mode="chat" aria-pressed="' + (d.mode === 'chat') + '">Chat with the AI</button>' +
-            '<button type="button" data-act="wiz-mode" data-mode="paste" aria-pressed="' + (d.mode === 'paste') + '">Paste a job description</button>' +
+            '<button type="button" data-act="wiz-mode" data-mode="paste" aria-pressed="' + (d.mode === 'paste') + '">Screenshot or paste</button>' +
+            '<button type="button" data-act="wiz-mode" data-mode="chat" aria-pressed="' + (d.mode === 'chat') + '">Brief in chat</button>' +
           '</div>' +
           (d.mode === 'chat' ? chatPanel() : pastePanel()) +
         '</div>' +
@@ -303,8 +303,10 @@
           '<p class="muted">The job gets an apply link to send to candidates, and a private recruiter link that lets you open it on another device.</p></div>' +
           '<p><button class="link-btn" data-act="wiz-skip">Skip this and write the requirements by hand</button></p></div></div>';
       if (d.mode === 'chat') {
-        if (!d.chat.length) addMsg('ai', 'Hello! I am your AI sourcing partner. Tell me about your startup: what are you building, what stage are you at, and what role do you need to hire?');
+        if (!d.chat.length) addMsg('ai', 'Hello! I am your sourcing partner. Tell me about your startup: what are you building, what stage are you at, and what role do you need to analyse?');
         else d.chat.forEach(function (m) { appendMsgNode(m.role, m.text); });
+      } else {
+        wirePasteDropzone();
       }
     } else {
       view.innerHTML = head + steps +
@@ -329,9 +331,9 @@
   }
 
   function chatPanel() {
-    return '<div class="chat"><div id="chat-log" class="chat-log" role="log" aria-label="Conversation with the AI sourcing partner"></div>' +
+    return '<div class="chat"><div id="chat-log" class="chat-log" role="log" aria-label="Conversation with the sourcing partner"></div>' +
       '<div id="chat-typing" class="typing" hidden><i></i><i></i><i></i><span style="margin-left:6px">Writing a reply</span></div>' +
-      '<form class="composer" data-form="chat"><label class="visually-hidden" for="chat-input">Tell the AI about your startup and the role</label>' +
+      '<form class="composer" data-form="chat"><label class="visually-hidden" for="chat-input">Tell us about your startup and the role</label>' +
       '<textarea id="chat-input" rows="3" maxlength="1500" placeholder="e.g. We are a seed-stage fintech in Lagos building payment APIs. We need a founding backend engineer with 3+ years in Python or Go." required></textarea>' +
       '<div class="row between"><button type="button" class="btn secondary sm" data-act="chat-example">Use an example brief</button>' +
       '<button type="submit" class="btn" id="chat-send">Send</button></div></form></div>' +
@@ -339,10 +341,74 @@
   }
 
   function pastePanel() {
-    return '<div class="stack"><div class="field"><label class="label" for="paste-jd">Job description</label>' +
-      '<textarea id="paste-jd" rows="12" data-field="draft.jd" placeholder="Paste the job description. Bullet points work best for requirements.">' + esc(draft.jd) + '</textarea></div>' +
+    return '<div class="stack">' +
+      '<div class="field"><label class="label">Upload screenshot, flyer, or job document</label>' +
+        '<div id="jd-drop" class="dropzone" tabindex="0" role="button" aria-label="Upload job screenshot or PDF document">' +
+          '<input type="file" id="jd-file" accept=".pdf,image/png,image/jpeg,image/webp" class="visually-hidden" tabindex="-1">' +
+          '<div class="dz-ic">' + icon('upload') + '</div>' +
+          '<div class="dz-title">Drop a screenshot or PDF here</div>' +
+          '<p class="hint">Take a screenshot of a job post (PNG, JPG, WEBP) or upload a PDF. You can also paste copied screenshots directly with Ctrl+V.</p>' +
+          '<button type="button" class="btn" id="btn-browse-jd">Choose a file</button>' +
+        '</div>' +
+        '<div id="jd-ocr-status" class="status-box" hidden role="status" style="margin-top:10px"><div class="spinner" aria-hidden="true"></div><p id="jd-ocr-msg">Reading&hellip;</p></div>' +
+      '</div>' +
+      '<div class="field"><label class="label" for="paste-jd">Job description text</label>' +
+        '<textarea id="paste-jd" rows="10" data-field="draft.jd" placeholder="Paste the job description or flyer text here. You can also press Ctrl+V to paste an image screenshot.">' + esc(draft.jd) + '</textarea></div>' +
       '<div class="row"><button class="btn accent lg" data-act="wiz-extract">Pull out requirements ' + icon('arrow-right') + '</button>' +
       '<button class="btn secondary" data-act="wiz-sample-jd">Use a sample description</button></div></div>';
+  }
+
+  function wirePasteDropzone() {
+    var drop = $('jd-drop'), fileInput = $('jd-file'), browse = $('btn-browse-jd'), ta = $('paste-jd'), st = $('jd-ocr-status'), stMsg = $('jd-ocr-msg');
+    if (!drop || !fileInput || !browse) return;
+
+    function busy(msg) {
+      if (st) {
+        st.hidden = !msg;
+        if (stMsg) stMsg.textContent = msg || 'Reading...';
+      }
+    }
+
+    async function handleFile(file) {
+      if (!file) return;
+      busy('Reading job image / document on this device...');
+      try {
+        var r = await CvTools.extract(file, busy);
+        var text = (r && r.text) || '';
+        if (!text && r && r.image) {
+          busy('Reading text from screenshot image...');
+          text = await CvTools.vision(r.image);
+        }
+        if (!text.trim()) throw new Error('No readable text found in that screenshot or file.');
+        draft.jd = text.trim();
+        if (ta) ta.value = draft.jd;
+        busy('');
+        toast('Extracted text from screenshot. Review below!');
+      } catch (err) {
+        busy('');
+        toast('Error reading file: ' + err.message);
+      }
+    }
+
+    CvTools.wireDropzone(drop, fileInput, browse, handleFile);
+
+    function onPaste(e) {
+      if (e.clipboardData && e.clipboardData.items) {
+        for (var i = 0; i < e.clipboardData.items.length; i++) {
+          var it = e.clipboardData.items[i];
+          if (it.type.indexOf('image') !== -1) {
+            var f = it.getAsFile();
+            if (f) {
+              e.preventDefault();
+              handleFile(f);
+              return;
+            }
+          }
+        }
+      }
+    }
+    if (ta) ta.addEventListener('paste', onPaste);
+    drop.addEventListener('paste', onPaste);
   }
 
   function appendMsgNode(role, text) {
@@ -407,7 +473,10 @@
   }
 
   function extractFromPaste() {
+    var ta = $('paste-jd');
+    if (ta && ta.value) draft.jd = ta.value;
     var jd = draft.jd;
+    if (!jd.trim()) { toast('Please paste job text or upload a screenshot first.'); return; }
     var found = Engine.extractRequirements(jd);
     draft.reqs = found.map(function (r) { return { id: uid(), text: r.text, weight: r.weight }; });
     if (!draft.title) draft.title = String(jd).split('\n').map(function (l) { return l.trim(); }).filter(Boolean)[0] || '';
