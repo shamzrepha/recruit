@@ -25,64 +25,6 @@
       phone: '+2348031234567',
       email: 'adaeze.okafor@example.com',
       consent: true,
-      rankingPercentile: 'Top 5%',
-      interviewSummary: 'Candidate confirmed 5 years total backend engineering, specifically architecting payments APIs on FastAPI with PostgreSQL. Handled 2M req/day peak throughput.',
-      interviewConfidence: 'high',
-      interviewTranscript: [
-        { role: 'ai', text: 'Could you elaborate on the scale of the payments API you shipped at your previous startup?' },
-        { role: 'candidate', text: 'We handled roughly 2M requests a day across 40 active fintech merchants, maintaining 99.95% uptime on AWS ECS.' },
-        { role: 'ai', text: 'How did you approach database migrations and indexing with PostgreSQL?' },
-        { role: 'candidate', text: 'We used Alembic for versioned schema migrations with zero-downtime deploy procedures and added targeted composite indices on merchant settlement tables.' }
-      ],
-      roadmapProfile: {
-        name: 'Adaeze Okafor',
-        headline: 'Lead Backend Engineer | Payments & Distributed Systems',
-        location: 'Lagos, Nigeria (Remote)',
-        phone: '+2348031234567',
-        email: 'adaeze.okafor@example.com',
-        links: {
-          linkedin: 'https://linkedin.com/in/adaeze-okafor',
-          github: 'https://github.com/adaeze-builds'
-        },
-        summary: 'Senior Backend Engineer with 5+ years experience architecting core payment APIs and distributed microservices with FastAPI, PostgreSQL, and AWS.',
-        education: [
-          {
-            school: 'University of Lagos (UNILAG)',
-            degree: 'B.Sc.',
-            field: 'Computer Science',
-            year: '2015 - 2019',
-            details: 'First Class Honours'
-          }
-        ],
-        roadmap: [
-          {
-            company: 'PaySprint Technologies (Series A)',
-            role: 'Lead Payments Engineer',
-            duration: '2021 - Present',
-            scale: '2M req/day across 40 fintech merchants',
-            highlights: [
-              'Architected RESTful payments API in FastAPI and PostgreSQL with 99.95% uptime.',
-              'Designed idempotent settlement ledger handling over $12M monthly transaction volume.'
-            ]
-          },
-          {
-            company: 'Logistix Express Lagos',
-            role: 'Backend Developer',
-            duration: '2019 - 2021',
-            scale: '10,000 daily parcel dispatches',
-            highlights: [
-              'Built vehicle dispatch tracking service using Python, Redis, and WebSockets.'
-            ]
-          }
-        ],
-        skills: {
-          languages: ['Python', 'SQL', 'Go', 'Bash'],
-          frameworks: ['FastAPI', 'Django', 'Flask'],
-          databases: ['PostgreSQL', 'Redis', 'MySQL'],
-          cloud: ['AWS (ECS, RDS)', 'Docker', 'GitHub Actions'],
-          tools: ['Alembic', 'Postman', 'Sentry']
-        }
-      },
       cv: [
         'Adaeze Okafor',
         'Backend Engineer, 5 years of experience',
@@ -97,7 +39,6 @@
       phone: '+2348023456789',
       email: 'tunde.bakare@example.com',
       consent: true,
-      rankingPercentile: 'Top 10%',
       cv: [
         'Tunde Bakare',
         'Software engineer, 4 years of experience building backend systems.',
@@ -112,7 +53,6 @@
       phone: '+2348098765432',
       email: 'chiamaka.eze@example.com',
       consent: false,
-      rankingPercentile: 'Top 25%',
       cv: [
         'Chiamaka Eze',
         'Recent graduate, Computer Science.',
@@ -126,7 +66,6 @@
       phone: '+2349091122334',
       email: 'ibrahim.sule@example.com',
       consent: true,
-      rankingPercentile: 'Top 5%',
       cv: [
         'Ibrahim Sule',
         'Senior engineer with 7 years of experience in backend services.',

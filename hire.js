@@ -1,1167 +1,961 @@
+/*
+ * Recruiting center: jobs, new-job wizard, and the per-job applicant pipeline.
+ * Hash routes:
+ *   #/                              jobs list
+ *   #/new                           new job wizard
+ *   #/job/<id>[/applicants[/<cand>]]  applicants (default)
+ *   #/job/<id>/requirements          edit the role
+ *   #/job/<id>/share                 links and storage
+ * Opening #/job/<id>?key=<key> (the private recruiter link) adds the job to this browser.
+ */
 (function () {
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var seq = 0;
-  var uid = function (p) { return p + (++seq); };
+  var view = $('view');
+  var call = ScoutData.call;
 
   var STATE_LABEL = { met: 'Stated', not_stated: 'Not stated', not_met: 'Contradicted' };
-  var DECISION_LABEL = { shortlist: 'Shortlisted', ask: 'Ask first', pass: 'Passed' };
+  var STAGE_LABEL = { new: 'New', shortlist: 'Shortlisted', ask: 'Ask first', pass: 'Passed' };
+  var DEFAULT_TEMPLATE = "Hi {first name}, I'm {recruiter name} from {company}. I saw your CV for the {role} role and would like a quick chat. Are you free this week?";
 
-  var state = {
-    reqs: [],
-    cands: [{ id: uid('c'), name: '', cv: '', phone: '', email: '', consent: false }],
-    out: null,
-    decisions: {},
-    ai: true,
-    revealedContacts: {},
-    chatMessages: [],
-    activeFilter: 'all'
-  };
+  var app = { ai: false, mode: 'local' };
+  var ui = { filter: 'all', showAdd: false, revealed: {}, csvContacts: false, screening: '', notice: null, autoScreen: null };
+  var draft = newDraft();
+  var edit = null;      // requirements tab form
+  var cache = null;     // { id, job, key, cands, fetchedAt }
+  var navId = 0;
+  var seq = 0;
+
+  /* ---------------------------------------------------------------- helpers */
 
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
+  function uid() { return 'r_' + Date.now().toString(36) + (++seq); }
+  function newDraft() { return { step: 1, mode: 'chat', title: '', company: '', jd: '', reqs: [], chat: [], note: '', busy: false }; }
+  function fmtDate(iso) {
+    var d = new Date(iso);
+    return isNaN(d) ? '' : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function isWide() { return window.matchMedia('(min-width: 1081px)').matches; }
 
-  function initials(name) {
-    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
-    if (!parts.length) return '?';
-    return ((parts[0][0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  function reqSig(reqs) {
+    var s = reqs.map(function (r) { return r.id + ':' + r.weight + ':' + r.text; }).join('|');
+    var h = 5381;
+    for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return 'h' + (h >>> 0).toString(36);
   }
 
-  function say(msg, isError) {
-    var el = $('status');
-    if (!el) return;
-    el.textContent = msg || '';
-    el.className = 'status' + (isError ? ' error' : '');
+  function toast(msg) {
+    var host = $('toast-host');
+    var t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    host.innerHTML = '';
+    host.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 2600);
   }
 
-  /* =========================================================================
-     TAB NAVIGATION
-     ========================================================================= */
-  var tabIntakeBtn = $('tab-intake-btn');
-  var tabScreenBtn = $('tab-screen-btn');
-  var tabJobsBtn = $('tab-jobs-btn');
-  var sectionIntake = $('section-intake');
-  var sectionScreen = $('section-screen');
-  var sectionJobs = $('section-jobs');
-
-  function switchTab(target) {
-    var tabs = [
-      { id: 'intake', btn: tabIntakeBtn, panel: sectionIntake },
-      { id: 'screen', btn: tabScreenBtn, panel: sectionScreen },
-      { id: 'jobs', btn: tabJobsBtn, panel: sectionJobs }
-    ];
-
-    tabs.forEach(function (t) {
-      if (!t.btn || !t.panel) return;
-      var isActive = t.id === target;
-      t.btn.classList.toggle('active', isActive);
-      t.btn.setAttribute('aria-selected', String(isActive));
-      t.panel.hidden = !isActive;
-    });
-
-    if (target === 'jobs') {
-      loadRecruiterJobs();
+  function copyText(text, okMsg) {
+    function done() { toast(okMsg || 'Copied'); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(fallback);
+    } else fallback();
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { toast('Copy failed. Select the link and copy it.'); }
+      ta.remove();
     }
   }
 
-  if (tabIntakeBtn) tabIntakeBtn.addEventListener('click', function () { switchTab('intake'); });
-  if (tabScreenBtn) tabScreenBtn.addEventListener('click', function () { switchTab('screen'); });
-  if (tabJobsBtn) tabJobsBtn.addEventListener('click', function () { switchTab('jobs'); });
+  function icon(name) { return '<svg class="ic" aria-hidden="true"><use href="#i-' + name + '"/></svg>'; }
 
-  /* =========================================================================
-     TAB 1: RECRUITER AI INTAKE CHAT
-     ========================================================================= */
-  var chatMessagesEl = $('recruiter-chat-messages');
-  var chatForm = $('recruiter-chat-form');
-  var chatInput = $('rec-chat-input');
-  var typingIndicator = $('recruiter-typing');
+  function getOutreach() {
+    var o = {};
+    try { o = JSON.parse(localStorage.getItem('scout2:outreach')) || {}; } catch (e) { o = {}; }
+    return { name: o.name || '', company: o.company || '', template: o.template || DEFAULT_TEMPLATE };
+  }
+  function saveOutreach(o) { try { localStorage.setItem('scout2:outreach', JSON.stringify(o)); } catch (e) { /* ignore */ } }
 
-  function appendChatMessage(role, text) {
-    var div = document.createElement('div');
-    div.className = 'chat-bubble ' + (role === 'ai' ? 'ai' : 'candidate');
-    div.innerHTML = '<span class="speaker-label">' + (role === 'ai' ? 'AI Sourcing Partner' : 'You') + '</span>' +
-      '<p class="bubble-text">' + esc(text) + '</p>';
-    chatMessagesEl.appendChild(div);
-    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-    state.chatMessages.push({ role: role, text: text });
+  /* ---------------------------------------------------------------- sidebar status */
+
+  function paintStatus() {
+    $('store-dot').className = 'dot ' + (app.mode === 'remote' ? 'on' : 'warn');
+    $('store-label').textContent = app.mode === 'remote' ? 'Shared storage on' : 'Saved in this browser';
+    $('ai-dot').className = 'dot ' + (app.ai ? 'on' : 'warn');
+    $('ai-label').textContent = app.ai ? 'AI screening on' : 'Keyword mode';
   }
 
-  function initRecruiterChat() {
-    appendChatMessage('ai', "Hello! I am your AI Sourcing Partner at Sourcing Sprints. Tell me about your startup: What are you building, what stage are you at, and what key role do you need to hire?");
+  ScoutData.mode().then(function (m) { app.mode = m; paintStatus(); });
+  fetch('/api/screen', { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : { ai: false }; })
+    .then(function (d) { app.ai = Boolean(d && d.ai); paintStatus(); })
+    .catch(function () { app.ai = false; paintStatus(); });
+
+  function setNav(which) {
+    var jobs = $('nav-jobs'), nw = $('nav-new');
+    if (which === 'jobs') jobs.setAttribute('aria-current', 'page'); else jobs.removeAttribute('aria-current');
+    if (which === 'new') nw.setAttribute('aria-current', 'page'); else nw.removeAttribute('aria-current');
+    var n = ScoutData.myJobs().length;
+    $('nav-jobs-count').textContent = n ? n : '';
   }
 
-  chatForm.addEventListener('submit', async function (e) {
-    e.preventDefault();
-    var text = chatInput.value.trim();
-    if (!text) return;
+  /* ---------------------------------------------------------------- routing */
 
-    appendChatMessage('recruiter', text);
-    chatInput.value = '';
-    typingIndicator.hidden = false;
-    $('rec-send-btn').disabled = true;
+  function parseHash() {
+    var h = location.hash.replace(/^#/, '') || '/';
+    var q = {};
+    var i = h.indexOf('?');
+    if (i >= 0) {
+      new URLSearchParams(h.slice(i + 1)).forEach(function (v, k) { q[k] = v; });
+      h = h.slice(0, i);
+    }
+    return { parts: h.split('/').filter(Boolean), q: q };
+  }
 
+  var lastBase = '';
+  async function route() {
+    var r = parseHash(), p = r.parts;
+    var base = p.slice(0, 3).join('/');
+    var my = ++navId;
     try {
-      var resp = await fetch('/api/role-intake?action=chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: state.chatMessages })
-      });
-      var data = await resp.json();
-      typingIndicator.hidden = true;
-      $('rec-send-btn').disabled = false;
-
-      if (data && data.reply) {
-        appendChatMessage('ai', data.reply);
-      }
-      if (data && data.suggestedRole && $('rec-role')) {
-        $('rec-role').value = data.suggestedRole;
-      }
-      if (data && data.action === 'show_candidates') {
-        renderChatCandidateCards();
-      }
+      if (!p.length) { setNav('jobs'); await jobsView(my); }
+      else if (p[0] === 'new') { setNav('new'); newJobView(); }
+      else if (p[0] === 'job' && p[1]) { setNav('jobs'); await jobView(my, p[1], p[2] || 'applicants', p[3] || null, r.q); }
+      else location.hash = '#/';
     } catch (err) {
-      typingIndicator.hidden = true;
-      $('rec-send-btn').disabled = false;
-      appendChatMessage('ai', "Understood. What are the key non-negotiable requirements for this role versus nice-to-haves?");
+      if (my === navId) errorView(err);
     }
-  });
+    if (base !== lastBase) { window.scrollTo(0, 0); lastBase = base; }
+  }
+  window.addEventListener('hashchange', route);
 
-  // Candidate Card Rendering within Chat
-  async function renderChatCandidateCards() {
-    var validCands = state.cands.filter(function (c) { return c.cv && c.cv.length >= 20; });
-    if (!validCands.length) {
-      await loadApplicantsAutomatically(true);
-      validCands = state.cands.filter(function (c) { return c.cv && c.cv.length >= 20; });
-    }
+  function errorView(err) {
+    view.innerHTML =
+      '<div class="empty-state"><h2>That did not work</h2><p>' + esc(err && err.message ? err.message : 'Something went wrong.') + '</p>' +
+      '<div class="row"><a class="btn" href="#/">Back to jobs</a></div></div>';
+  }
 
-    var div = document.createElement('div');
-    div.className = 'chat-bubble ai chat-candidate-deck';
+  /* ================================================================ JOBS LIST */
 
-    if (!validCands.length) {
-      div.innerHTML = '<span class="speaker-label">AI Sourcing Partner — Candidate Pool</span>' +
-        '<p class="bubble-text">No candidate applications found in your pool yet.</p>' +
-        '<p style="font-size:0.85rem;margin-top:6px;color:var(--muted)">Candidates can submit their CVs at <a href="/apply" target="_blank" style="color:var(--primary);font-weight:700">/apply</a>. You can also load sample candidates in the Screening tab!</p>';
-      chatMessagesEl.appendChild(div);
-      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  async function jobsView(my) {
+    cache = null; // opening a job from the list always fetches fresh applicants
+    var mine = ScoutData.myJobs();
+    var head =
+      '<div class="view-head"><div><h1>Jobs</h1><p class="sub">Each job has its own apply link and its own applicants.</p></div>' +
+      '<div class="row"><button class="btn secondary" data-act="sample">Load a sample job</button>' +
+      '<a class="btn" href="#/new">' + icon('plus') + ' New job</a></div></div>';
+
+    if (!mine.length) {
+      view.innerHTML =
+        '<div class="view-head"><div><h1>Jobs</h1></div></div>' +
+        '<div class="empty-state"><h2>No jobs yet.</h2>' +
+        '<p>Create a job, share its apply link, and applicants show up here ranked against your requirements. Want to see it working first? Load a sample job with four made-up applicants.</p>' +
+        '<div class="row"><a class="btn lg" href="#/new">Create your first job</a><button class="btn secondary lg" data-act="sample">Load a sample job</button></div></div>';
       return;
     }
 
-    var cardsHtml = validCands.slice(0, 30).map(function (c, idx) {
-      var rm = c.roadmapProfile || {};
-      var headline = rm.headline || c.role || 'Applicant';
-      var percentile = c.rankingPercentile || (rm.suggestedRoles && rm.suggestedRoles[0] && rm.suggestedRoles[0].percentile) || 'Top 10%';
-      var school = (rm.education && rm.education[0] && rm.education[0].school) ? rm.education[0].school : '';
+    view.innerHTML = head + '<p class="muted">Loading your jobs&hellip;</p>';
+    var rows = await Promise.all(mine.map(async function (m) {
+      try {
+        var j = (await call('jobGet', { id: m.id })).job;
+        var cs = (await call('candidates', { jobId: m.id, key: m.key })).candidates;
+        return { m: m, job: j, cands: cs };
+      } catch (e) { return { m: m, error: e }; }
+    }));
+    if (my !== navId) return;
 
-      var skills = [];
-      if (rm.skills) {
-        Object.keys(rm.skills).forEach(function (cat) {
-          skills = skills.concat(rm.skills[cat] || []);
-        });
-      }
-      var skillTags = skills.slice(0, 4).map(function (s) {
-        return '<span class="chat-skill-pill">' + esc(s) + '</span>';
-      }).join('');
+    var html = head +
+      '<div class="jobs-head eyebrow" aria-hidden="true"><span>Role</span><span>Applicants</span><span>To review</span><span>Status</span><span></span></div>' +
+      '<div class="jobs">' + rows.map(function (r) {
+        if (r.error) {
+          return '<div class="job-row"><div><div class="t">' + esc(r.m.title) + '</div><div class="c">Not available. It may have expired, or this browser cannot reach it.</div></div>' +
+            '<span></span><span></span><button class="btn ghost sm" data-act="forget" data-id="' + esc(r.m.id) + '">Remove</button><span></span></div>';
+        }
+        var fresh = r.cands.filter(function (c) { return c.stage === 'new'; }).length;
+        return '<a class="job-row" href="#/job/' + esc(r.job.id) + '">' +
+          '<div><div class="t">' + esc(r.job.title) + '</div><div class="c">' + esc(r.job.company || 'No company set') + ' &middot; created ' + esc(fmtDate(r.job.createdAt)) + '</div></div>' +
+          '<div class="num">' + r.cands.length + '<small>applicants</small></div>' +
+          '<div class="num">' + fresh + '<small>to review</small></div>' +
+          '<div class="st"><span class="chip ' + (r.job.status === 'open' ? 'ok' : '') + '"><span class="dot"></span>' + (r.job.status === 'open' ? 'Open' : 'Closed') + '</span></div>' +
+          '<span class="arrow">' + icon('arrow-right') + '</span></a>';
+      }).join('') + '</div>';
+    view.innerHTML = html;
+  }
 
-      var pClass = 'pill-top-5';
-      if (/10%/.test(percentile)) pClass = 'pill-top-10';
-      else if (/25%/.test(percentile)) pClass = 'pill-top-25';
+  async function makeSample(btn) {
+    if (btn) btn.disabled = true;
+    toast('Creating a sample job&hellip;'.replace('&hellip;', '...'));
+    var reqs = Engine.extractRequirements(Samples.JOB).map(function (r) { return { id: uid(), text: r.text, weight: r.weight }; });
+    var made = await call('jobCreate', { title: 'Founding Backend Engineer', company: 'Sample Startup', jd: Samples.JOB, requirements: reqs });
+    ScoutData.rememberJob(made.job, made.key);
+    for (var i = 0; i < Samples.CANDIDATES.length; i++) {
+      var c = Samples.CANDIDATES[i];
+      await call('apply', { jobId: made.job.id, name: c.name, cv: c.cv, phone: c.phone, email: c.email, consent: c.consent, location: 'Lagos, Nigeria' });
+    }
+    ui.autoScreen = made.job.id;
+    cache = null;
+    location.hash = '#/job/' + made.job.id + '/applicants';
+  }
 
-      return '<div class="chat-cand-card">' +
-        '<div class="chat-cand-top">' +
-          '<div class="chat-cand-avatar">' + initials(c.name || 'Candidate') + '</div>' +
-          '<div class="chat-cand-info">' +
-            '<div class="chat-cand-name-row">' +
-              '<span class="chat-cand-name">' + esc(c.name || 'Applicant ' + (idx + 1)) + '</span>' +
-              '<span class="chat-ranking-badge ' + pClass + '">' + esc(percentile) + '</span>' +
-            '</div>' +
-            '<div class="chat-cand-headline">' + esc(headline) + '</div>' +
-            (school ? '<div class="chat-cand-school">🎓 ' + esc(school) + '</div>' : '') +
+  /* ================================================================ NEW JOB WIZARD */
+
+  function newJobView() {
+    var d = draft;
+    var steps = '<ol class="steps" aria-label="Steps">' +
+      '<li class="' + (d.step === 1 ? 'current' : 'done') + '">Describe the role</li><li class="sep" aria-hidden="true" style="width:32px;height:1px;background:var(--line-strong)"></li>' +
+      '<li class="' + (d.step === 2 ? 'current' : '') + '">Review and create</li></ol>';
+    var head = '<div class="view-head"><div><a class="crumb" href="#/">' + icon('arrow-left') + ' Jobs</a><h1>New job</h1></div></div>';
+
+    if (d.step === 1) {
+      view.innerHTML = head + steps +
+        '<div class="wizard"><div>' +
+          '<div class="mode-switch" role="group" aria-label="How do you want to start?">' +
+            '<button type="button" data-act="wiz-mode" data-mode="chat" aria-pressed="' + (d.mode === 'chat') + '">Chat with the AI</button>' +
+            '<button type="button" data-act="wiz-mode" data-mode="paste" aria-pressed="' + (d.mode === 'paste') + '">Paste a job description</button>' +
           '</div>' +
+          (d.mode === 'chat' ? chatPanel() : pastePanel()) +
         '</div>' +
-        (skillTags ? '<div class="chat-cand-skills">' + skillTags + '</div>' : '') +
-        '<div class="chat-cand-actions">' +
-          '<button type="button" class="chat-btn-action view-rm" data-act="chat-view-roadmap" data-id="' + esc(c.id) + '">' +
-            '🔍 View Full CV & Roadmap' +
-          '</button>' +
-          '<button type="button" class="chat-btn-action screen-it" data-act="chat-screen-cand" data-id="' + esc(c.id) + '">' +
-            '⚡ Screen in Dashboard' +
-          '</button>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-
-    div.innerHTML = '<span class="speaker-label">AI Sourcing Partner — Candidate Pool</span>' +
-      '<div class="chat-deck-header">' +
-        '<strong>Found ' + validCands.length + ' Candidate(s) in Pool</strong>' +
-        '<span style="font-size:0.8rem;color:var(--muted)">Review work badges, skills & full CVs</span>' +
-      '</div>' +
-      '<div class="chat-cands-grid">' + cardsHtml + '</div>';
-
-    chatMessagesEl.appendChild(div);
-    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-  }
-
-  // Delegated click on chat messages for candidate actions
-  chatMessagesEl.addEventListener('click', function (e) {
-    var rmBtn = e.target.closest('button[data-act="chat-view-roadmap"]');
-    if (rmBtn) {
-      openRoadmapModal(rmBtn.dataset.id);
-      return;
-    }
-    var screenBtn = e.target.closest('button[data-act="chat-screen-cand"]');
-    if (screenBtn) {
-      switchTab('screen');
-      say('Switched to Screening Dashboard. Review requirements and click "Screen candidates".');
-      return;
-    }
-  });
-
-  // Example brief button
-  $('btn-quick-sample-chat').addEventListener('click', function () {
-    appendChatMessage('recruiter', "We are a seed-stage fintech startup in Lagos building cross-border B2B payments. We need a Founding Backend Engineer with 3+ years in Python or Go, deep PostgreSQL knowledge, who has shipped high-volume APIs to real customers.");
-    appendChatMessage('ai', "Terrific! A founding role in a seed-stage payments startup requires both high technical rigor and execution ownership. I'll structure this into must-have technical criteria (Python/Go, PostgreSQL, high-traffic APIs) and nice-to-haves (early-stage startup experience, AWS/GCP). Click 'Generate Role & Screening Requirements' to load this into your screening dashboard.");
-  });
-
-  // Generate Role Profile & Requirements
-  $('btn-generate-role').addEventListener('click', async function () {
-    var btn = $('btn-generate-role');
-    btn.disabled = true;
-    btn.textContent = 'Writing your requirements…';
-
-    try {
-      var resp = await fetch('/api/role-intake?action=generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: state.chatMessages })
-      });
-      var data = await resp.json();
-
-      if (data.title && $('rec-role')) $('rec-role').value = data.title;
-      if (data.jd && $('jd')) $('jd').value = data.jd;
-
-      if (Array.isArray(data.requirements) && data.requirements.length) {
-        state.reqs = data.requirements.map(function (r) {
-          return { id: uid('r'), text: r.text, weight: r.weight || 'must' };
-        });
-      } else if (data.jd) {
-        state.reqs = Engine.extractRequirements(data.jd).map(function (r) {
-          return { id: uid('r'), text: r.text, weight: r.weight };
-        });
+        '<div class="stack"><div><h2 style="font-size:1.05rem;margin-bottom:8px">What happens next</h2>' +
+          '<p class="muted">You will get a list of requirements, each marked Must have or Nice to have. Must-haves count three times as much in the score. You can edit everything before the job is created.</p></div>' +
+          '<div><h2 style="font-size:1.05rem;margin-bottom:8px">Then</h2>' +
+          '<p class="muted">The job gets an apply link to send to candidates, and a private recruiter link that lets you open it on another device.</p></div>' +
+          '<p><button class="link-btn" data-act="wiz-skip">Skip this and write the requirements by hand</button></p></div></div>';
+      if (d.mode === 'chat') {
+        if (!d.chat.length) addMsg('ai', 'Hello! I am your AI sourcing partner. Tell me about your startup: what are you building, what stage are you at, and what role do you need to hire?');
+        else d.chat.forEach(function (m) { appendMsgNode(m.role, m.text); });
       }
-
-      renderReqs();
-      switchTab('screen');
-      say('Role and ' + state.reqs.length + ' requirements created from your chat. Check them, then add candidates.');
-    } catch (err) {
-      console.error(err);
-      // Fallback to sample role
-      $('jd').value = Samples.JOB;
-      state.reqs = Engine.extractRequirements(Samples.JOB).map(function (r) {
-        return { id: uid('r'), text: r.text, weight: r.weight };
-      });
-      renderReqs();
-      switchTab('screen');
-      say('Could not reach the AI, so a sample role was loaded. Edit the requirements before screening.');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Generate role and requirements →';
-    }
-  });
-
-  /* =========================================================================
-     TAB 2: SCREENING DASHBOARD & OUTREACH
-     ========================================================================= */
-
-  function renderReqs() {
-    var ul = $('reqs');
-    if (!ul) return;
-    if ($('req-count')) $('req-count').textContent = state.reqs.length;
-    if (!state.reqs.length) {
-      ul.innerHTML = '<li class="empty">No requirements yet. Paste a job description and press &ldquo;Pull out requirements&rdquo;, or brief the AI in step 1.</li>';
-      return;
-    }
-    ul.innerHTML = state.reqs.map(function (r) {
-      return '<li data-id="' + r.id + '">' +
-        '<input type="text" maxlength="140" value="' + esc(r.text) + '" aria-label="Requirement">' +
-        '<button type="button" class="weight ' + (r.weight === 'nice' ? 'nice' : 'must') + '" data-act="weight" ' +
-          'aria-label="Importance: ' + (r.weight === 'nice' ? 'nice to have' : 'must have') + '. Press to change.">' +
-          (r.weight === 'nice' ? 'Nice to have' : 'Must have') + '</button>' +
-        '<button type="button" class="icon-btn" data-act="del" aria-label="Remove requirement">&times;</button>' +
-        '</li>';
-    }).join('');
-  }
-
-  $('reqs').addEventListener('input', function (e) {
-    var li = e.target.closest('li[data-id]');
-    if (!li) return;
-    var r = state.reqs.filter(function (x) { return x.id === li.dataset.id; })[0];
-    if (r) r.text = e.target.value;
-  });
-
-  $('reqs').addEventListener('click', function (e) {
-    var btn = e.target.closest('button[data-act]');
-    var li = e.target.closest('li[data-id]');
-    if (!btn || !li) return;
-    var id = li.dataset.id;
-    if (btn.dataset.act === 'del') {
-      state.reqs = state.reqs.filter(function (x) { return x.id !== id; });
     } else {
-      state.reqs.forEach(function (x) { if (x.id === id) x.weight = x.weight === 'nice' ? 'must' : 'nice'; });
+      view.innerHTML = head + steps +
+        '<div class="wizard"><div class="stack-lg">' +
+          (d.note ? '<div class="banner">' + esc(d.note) + '</div>' : '') +
+          '<div class="form-grid"><div class="field"><label class="label" for="w-title">Role title</label>' +
+            '<input id="w-title" type="text" maxlength="100" data-field="draft.title" value="' + esc(d.title) + '" placeholder="e.g. Founding Backend Engineer"></div>' +
+          '<div class="field"><label class="label" for="w-company">Company</label>' +
+            '<input id="w-company" type="text" maxlength="80" data-field="draft.company" value="' + esc(d.company) + '" placeholder="Shown to candidates"></div></div>' +
+          '<div><h2 style="font-size:1.05rem">Requirements</h2><p class="hint" style="margin:4px 0 12px">Click a label to switch between Must have and Nice to have.</p>' +
+            reqEditor('draft', d.reqs) + '</div>' +
+          '<details><summary class="link-btn" style="cursor:pointer">Job description (optional)</summary>' +
+            '<div class="field" style="margin-top:12px"><label class="visually-hidden" for="w-jd">Job description</label>' +
+            '<textarea id="w-jd" rows="8" data-field="draft.jd">' + esc(d.jd) + '</textarea></div></details>' +
+          '<p id="wiz-msg" class="field-msg error" role="alert"></p>' +
+          '<div class="row"><button class="btn ghost" data-act="wiz-back">' + icon('arrow-left') + ' Back</button>' +
+          '<button class="btn lg" data-act="wiz-create">Create job</button></div>' +
+        '</div><div><h2 style="font-size:1.05rem;margin-bottom:8px">Check this carefully</h2>' +
+          '<p class="muted">Candidates are ranked only against these requirements, so make each one something a CV can show or not show. Keep them specific, for example &ldquo;3+ years building backend services&rdquo;.</p></div></div>';
     }
-    renderReqs();
-  });
-
-  function addReq() {
-    var inp = $('newreq');
-    var text = inp.value.trim();
-    if (!text) { inp.focus(); return; }
-    state.reqs.push({ id: uid('r'), text: text, weight: 'must' });
-    inp.value = '';
-    renderReqs();
-    inp.focus();
-  }
-  $('addreq').addEventListener('click', addReq);
-  $('newreq').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addReq(); } });
-
-  $('extract').addEventListener('click', function () {
-    var found = Engine.extractRequirements($('jd').value);
-    if (!found.length) {
-      say('No requirements found. Use bullet points in the job description, or add them by hand.', true);
-      return;
-    }
-    state.reqs = found.map(function (r) { return { id: uid('r'), text: r.text, weight: r.weight }; });
-    renderReqs();
-    say('Found ' + found.length + ' requirements. Edit them before screening.');
-  });
-
-  function renderCands() {
-    if ($('cand-count')) $('cand-count').textContent = state.cands.length;
-    $('cands').innerHTML = state.cands.map(function (c, i) {
-      var chip = (c.phone || c.email)
-        ? (c.consent ? '<span class="chip ok">Contact shared</span>' : '<span class="chip">Contact private</span>')
-        : '';
-      return '<div class="cand" data-id="' + c.id + '">' +
-        '<div class="cand-head">' +
-          '<span class="avatar" aria-hidden="true">' + esc(initials(c.name)) + '</span>' +
-          '<input type="text" maxlength="80" value="' + esc(c.name) + '" placeholder="Name (optional)" aria-label="Candidate ' + (i + 1) + ' name">' +
-          chip +
-          '<button type="button" class="icon-btn" data-act="delcand" aria-label="Remove candidate ' + (i + 1) + '">&times;</button>' +
-        '</div>' +
-        '<label class="visually-hidden" for="cv-' + c.id + '">CV text for candidate ' + (i + 1) + '</label>' +
-        '<textarea id="cv-' + c.id + '" rows="5" maxlength="12000" placeholder="Paste the CV text here">' + esc(c.cv) + '</textarea>' +
-        '</div>';
-    }).join('');
   }
 
-  $('cands').addEventListener('input', function (e) {
-    var box = e.target.closest('.cand');
-    if (!box) return;
-    var c = state.cands.filter(function (x) { return x.id === box.dataset.id; })[0];
-    if (!c) return;
-    if (e.target.tagName === 'TEXTAREA') c.cv = e.target.value; else c.name = e.target.value;
-  });
+  function chatPanel() {
+    return '<div class="chat"><div id="chat-log" class="chat-log" role="log" aria-label="Conversation with the AI sourcing partner"></div>' +
+      '<div id="chat-typing" class="typing" hidden><i></i><i></i><i></i><span style="margin-left:6px">Writing a reply</span></div>' +
+      '<form class="composer" data-form="chat"><label class="visually-hidden" for="chat-input">Tell the AI about your startup and the role</label>' +
+      '<textarea id="chat-input" rows="3" maxlength="1500" placeholder="e.g. We are a seed-stage fintech in Lagos building payment APIs. We need a founding backend engineer with 3+ years in Python or Go." required></textarea>' +
+      '<div class="row between"><button type="button" class="btn secondary sm" data-act="chat-example">Use an example brief</button>' +
+      '<button type="submit" class="btn" id="chat-send">Send</button></div></form></div>' +
+      '<div class="row" style="margin-top:20px"><button class="btn accent lg" data-act="wiz-generate" id="wiz-generate">Generate requirements ' + icon('arrow-right') + '</button></div>';
+  }
 
-  $('cands').addEventListener('click', function (e) {
-    var btn = e.target.closest('button[data-act="delcand"]');
-    if (!btn) return;
-    var id = btn.closest('.cand').dataset.id;
-    state.cands = state.cands.filter(function (x) { return x.id !== id; });
-    if (!state.cands.length) state.cands.push({ id: uid('c'), name: '', cv: '' });
-    renderCands();
-  });
+  function pastePanel() {
+    return '<div class="stack"><div class="field"><label class="label" for="paste-jd">Job description</label>' +
+      '<textarea id="paste-jd" rows="12" data-field="draft.jd" placeholder="Paste the job description. Bullet points work best for requirements.">' + esc(draft.jd) + '</textarea></div>' +
+      '<div class="row"><button class="btn accent lg" data-act="wiz-extract">Pull out requirements ' + icon('arrow-right') + '</button>' +
+      '<button class="btn secondary" data-act="wiz-sample-jd">Use a sample description</button></div></div>';
+  }
 
-  $('addcand').addEventListener('click', function () {
-    if (state.cands.length >= 15) { say('The limit is 15 candidates per screen.', true); return; }
-    state.cands.push({ id: uid('c'), name: '', cv: '' });
-    renderCands();
-  });
+  function appendMsgNode(role, text) {
+    var log = $('chat-log');
+    if (!log) return;
+    var div = document.createElement('div');
+    div.className = 'msg ' + (role === 'ai' ? 'ai' : 'me');
+    div.innerHTML = '<span class="who">' + (role === 'ai' ? 'AI sourcing partner' : 'You') + '</span>' + esc(text);
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+  function addMsg(role, text) { draft.chat.push({ role: role, text: text }); appendMsgNode(role, text); }
 
-  $('sample').addEventListener('click', function () {
-    $('jd').value = Samples.JOB;
-    $('rec-role').value = 'Founding Backend Engineer';
-    state.reqs = Engine.extractRequirements(Samples.JOB).map(function (r) { return { id: uid('r'), text: r.text, weight: r.weight }; });
-    state.cands = Samples.CANDIDATES.map(function (c) {
-      return {
-        id: uid('c'),
-        name: c.name,
-        cv: c.cv,
-        phone: c.phone || '',
-        email: c.email || '',
-        consent: Boolean(c.consent),
-        roadmapProfile: c.roadmapProfile || null,
-        rankingPercentile: c.rankingPercentile || null,
-        interviewSummary: c.interviewSummary || null,
-        interviewConfidence: c.interviewConfidence || null,
-        interviewTranscript: c.interviewTranscript || null
-      };
-    });
-    renderReqs();
-    renderCands();
-    say('Sample role and made-up candidates loaded. Press Screen candidates.');
-  });
+  async function postJson(url, body) {
+    var resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    var data = await resp.json().catch(function () { return {}; });
+    if (!resp.ok) throw new Error(data.error || 'Request failed (' + resp.status + ').');
+    return data;
+  }
 
-  async function loadApplicantsAutomatically(silent) {
-    if (!silent) say('Loading applicants from portal…');
+  async function sendChat() {
+    var ta = $('chat-input');
+    var text = ta.value.trim();
+    if (!text) return;
+    addMsg('recruiter', text);
+    ta.value = '';
+    $('chat-typing').hidden = false;
+    $('chat-send').disabled = true;
     try {
-      var resp = await fetch('/api/data?action=list_candidates');
-      var list = [];
-      if (resp.ok) {
-        var data = await resp.json();
-        list = data.candidates || [];
-      } else {
-        list = JSON.parse(localStorage.getItem('scout_candidates') || '[]');
-      }
-      if (!list || !list.length) {
-        if (!silent) say('No candidate applications found yet. Candidates can apply at /apply.', true);
-        return false;
-      }
-      state.cands = list.map(function (c) {
-        return {
-          id: c.id || uid('c'),
-          name: c.name,
-          cv: c.cv,
-          phone: c.phone || '',
-          email: c.email || '',
-          consent: Boolean(c.consent),
-          roadmapProfile: c.roadmapProfile || null,
-          rankingPercentile: c.rankingPercentile || null,
-          interviewSummary: c.interviewSummary || null,
-          interviewConfidence: c.interviewConfidence || null,
-          interviewTranscript: c.interviewTranscript || null
-        };
-      });
-      renderCands();
-      if (!silent) say('Loaded ' + list.length + ' candidate(s) from portal.');
-      return true;
+      var data = await postJson('/api/role-intake?action=chat', { messages: draft.chat });
+      if (data.reply) addMsg('ai', data.reply);
+      if (data.suggestedRole && !draft.title) draft.title = data.suggestedRole;
     } catch (err) {
-      if (!silent) say('Could not load applicants: ' + err.message, true);
-      return false;
+      addMsg('ai', 'I could not reach the AI just now. You can keep describing the role, or press "Generate requirements" to continue.');
+    }
+    var t = $('chat-typing'), s = $('chat-send');
+    if (t) t.hidden = true;
+    if (s) s.disabled = false;
+  }
+
+  async function generate() {
+    var said = draft.chat.filter(function (m) { return m.role === 'recruiter'; }).map(function (m) { return m.text; }).join('\n');
+    if (!said.trim()) { toast('Tell the AI about the role first.'); return; }
+    var btn = $('wiz-generate');
+    btn.disabled = true; btn.textContent = 'Writing your requirements...';
+    try {
+      var data = await postJson('/api/role-intake?action=generate', { messages: draft.chat });
+      draft.title = data.title || draft.title;
+      draft.jd = data.jd || said;
+      draft.reqs = (data.requirements || []).map(function (r) { return { id: uid(), text: r.text, weight: r.weight === 'nice' ? 'nice' : 'must' }; });
+      draft.note = data.demo ? 'The AI is not connected, so these are sample requirements. Edit them to fit your role.' : '';
+    } catch (err) {
+      draft.jd = said;
+      draft.reqs = Engine.extractRequirements(said).map(function (r) { return { id: uid(), text: r.text, weight: r.weight }; });
+      draft.note = 'Could not reach the AI, so requirements were pulled from your messages by keyword.' + (draft.reqs.length ? '' : ' None were found. Add them below.');
+    }
+    draft.step = 2;
+    newJobView();
+  }
+
+  function extractFromPaste() {
+    var jd = draft.jd;
+    var found = Engine.extractRequirements(jd);
+    draft.reqs = found.map(function (r) { return { id: uid(), text: r.text, weight: r.weight }; });
+    if (!draft.title) draft.title = String(jd).split('\n').map(function (l) { return l.trim(); }).filter(Boolean)[0] || '';
+    draft.title = draft.title.slice(0, 100);
+    draft.note = found.length ? '' : 'No bullet-point requirements were found. Add them below.';
+    draft.step = 2;
+    newJobView();
+  }
+
+  async function createJob() {
+    var msg = $('wiz-msg');
+    var reqs = draft.reqs.filter(function (r) { return r.text.trim(); });
+    if (!draft.title.trim()) { msg.textContent = 'Give the role a title.'; $('w-title').focus(); return; }
+    if (!reqs.length) { msg.textContent = 'Add at least one requirement.'; return; }
+    msg.textContent = '';
+    try {
+      var made = await call('jobCreate', { title: draft.title, company: draft.company, jd: draft.jd, requirements: reqs });
+      ScoutData.rememberJob(made.job, made.key);
+      draft = newDraft();
+      cache = null;
+      toast('Job created. Share the apply link to get applicants.');
+      location.hash = '#/job/' + made.job.id + '/share';
+    } catch (err) { msg.textContent = err.message; }
+  }
+
+  /* ---- requirements editor (used by the wizard and the Requirements tab) ---- */
+
+  function listFor(name) { return name === 'draft' ? draft.reqs : (edit ? edit.reqs : []); }
+
+  function reqEditor(listName, reqs) {
+    return '<ul class="reqs" data-list="' + listName + '">' + (reqs.length ? reqs.map(function (r, i) {
+      return '<li><input type="text" maxlength="140" value="' + esc(r.text) + '" aria-label="Requirement ' + (i + 1) + '" data-field="req-text" data-list="' + listName + '" data-i="' + i + '">' +
+        '<button type="button" class="weight ' + (r.weight === 'nice' ? 'nice' : 'must') + '" data-act="req-weight" data-list="' + listName + '" data-i="' + i + '" aria-label="Importance: ' + (r.weight === 'nice' ? 'nice to have' : 'must have') + '. Press to change.">' + (r.weight === 'nice' ? 'Nice to have' : 'Must have') + '</button>' +
+        '<button type="button" class="icon-btn" data-act="req-del" data-list="' + listName + '" data-i="' + i + '" aria-label="Remove requirement ' + (i + 1) + '">&times;</button></li>';
+    }).join('') : '<li class="empty">No requirements yet. Add the first one below.</li>') + '</ul>' +
+      '<div class="add-line"><label class="visually-hidden" for="new-req-' + listName + '">Add a requirement</label>' +
+      '<input id="new-req-' + listName + '" type="text" maxlength="140" placeholder="Add a requirement, then press Enter" data-field="new-req" data-list="' + listName + '">' +
+      '<button type="button" class="btn secondary" data-act="req-add" data-list="' + listName + '">Add</button></div>';
+  }
+
+  function repaintReqs(listName) {
+    var ul = view.querySelector('ul.reqs[data-list="' + listName + '"]');
+    if (!ul) return;
+    var holder = ul.parentNode;
+    var tmp = document.createElement('div');
+    tmp.innerHTML = reqEditor(listName, listFor(listName));
+    // swap list only; keep the add input as is
+    ul.replaceWith(tmp.firstChild);
+    return holder;
+  }
+
+  /* ================================================================ JOB VIEW */
+
+  async function loadJob(id, qkey) {
+    var key = ScoutData.keyFor(id) || '';
+    var fromLink = false;
+    if (!key && qkey) { key = qkey; fromLink = true; }
+    var job = (await call('jobGet', { id: id })).job;
+    if (!key) return { id: id, job: job, key: '', cands: [], locked: true };
+    var cands;
+    try { cands = (await call('candidates', { jobId: id, key: key })).candidates; }
+    catch (err) {
+      if (err.status === 403) return { id: id, job: job, key: '', cands: [], locked: true, badKey: fromLink };
+      throw err;
+    }
+    if (fromLink) ScoutData.rememberJob(job, key);
+    return { id: id, job: job, key: key, cands: cands, fetchedAt: Date.now() };
+  }
+
+  async function jobView(my, id, tab, candId, q) {
+    var needLoad = !cache || cache.id !== id || (q && q.key) || cache.locked;
+    if (needLoad) {
+      view.innerHTML = '<p class="muted">Loading&hellip;</p>';
+      var data = await loadJob(id, q && q.key);
+      if (my !== navId) return;
+      cache = data;
+      if (q && q.key && !data.locked) history.replaceState(null, '', '#/job/' + id + (tab !== 'applicants' ? '/' + tab : ''));
+      edit = null;
+      ui.filter = 'all'; ui.showAdd = false; ui.notice = null;
+    }
+    if (cache.locked) { lockedView(); return; }
+    if (tab === 'requirements' && !edit) edit = { title: cache.job.title, company: cache.job.company, jd: cache.job.jd, status: cache.job.status, reqs: cache.job.requirements.map(function (r) { return { id: r.id, text: r.text, weight: r.weight }; }) };
+    if (tab !== 'requirements') edit = null;
+    renderJob(tab, candId);
+
+    if (ui.autoScreen === id) {
+      ui.autoScreen = null;
+      var need = needsScreen();
+      if (need.length) screenCands(need);
     }
   }
 
-  $('load-applicants').addEventListener('click', function () {
-    loadApplicantsAutomatically(false);
-  });
+  function lockedView() {
+    var j = cache.job;
+    view.innerHTML =
+      '<div class="empty-state"><h2>' + esc(j.title) + '</h2>' +
+      '<p>' + (cache.badKey ? 'That recruiter link does not match this job. ' : '') + 'This job is not linked to this browser. Open the private recruiter link that was shown when you created it to manage the job here.</p>' +
+      '<div class="row"><a class="btn" href="#/">Back to jobs</a></div></div>';
+  }
 
-  /* ---------- Run Screening ---------- */
-  $('run').addEventListener('click', run);
+  function jobHead(tab) {
+    var j = cache.job, n = cache.cands.length;
+    var base = '#/job/' + j.id;
+    return '<a class="crumb" href="#/">' + icon('arrow-left') + ' Jobs</a>' +
+      '<div class="view-head"><div><h1>' + esc(j.title) + '</h1>' +
+      '<p class="sub">' + esc(j.company || 'No company set') + ' &middot; <span class="chip ' + (j.status === 'open' ? 'ok' : '') + '"><span class="dot"></span>' + (j.status === 'open' ? 'Open' : 'Closed') + '</span></p></div>' +
+      '<div class="row"><button class="btn secondary" data-act="copy-apply">' + icon('link') + ' Copy apply link</button></div></div>' +
+      '<nav class="tabs-line" aria-label="Job sections">' +
+      '<a href="' + base + '/applicants"' + (tab === 'applicants' ? ' aria-current="page"' : '') + '>Applicants<span class="count">' + n + '</span></a>' +
+      '<a href="' + base + '/requirements"' + (tab === 'requirements' ? ' aria-current="page"' : '') + '>Requirements</a>' +
+      '<a href="' + base + '/share"' + (tab === 'share' ? ' aria-current="page"' : '') + '>Share</a></nav>';
+  }
 
-  async function run() {
-    var reqs = state.reqs
-      .map(function (r) { return { id: r.id, text: r.text.trim(), weight: r.weight }; })
-      .filter(function (r) { return r.text; });
-    var cands = state.cands
-      .map(function (c, i) {
-        return {
-          id: c.id,
-          name: c.name.trim() || Engine.guessName(c.cv, i),
-          cv: c.cv.trim(),
-          phone: c.phone || '',
-          email: c.email || '',
-          consent: Boolean(c.consent),
-          roadmapProfile: c.roadmapProfile || null,
-          rankingPercentile: c.rankingPercentile || null,
-          interviewSummary: c.interviewSummary || null,
-          interviewConfidence: c.interviewConfidence || null,
-          interviewTranscript: c.interviewTranscript || null
-        };
-      })
-      .filter(function (c) { return c.cv.length >= 20; });
+  var focusSel = null;
+  function renderJob(tab, candId) {
+    var html = jobHead(tab);
+    if (tab === 'requirements') html += requirementsTab();
+    else if (tab === 'share') html += shareTab();
+    else html += applicantsTab(candId);
+    view.innerHTML = html;
+    if (focusSel) { var n = view.querySelector(focusSel); if (n) n.focus(); focusSel = null; }
+  }
+  function rerender() {
+    var r = parseHash();
+    renderJob(r.parts[2] || 'applicants', r.parts[3] || null);
+  }
 
-    if (!reqs.length) { say('Add or extract at least one requirement first.', true); return; }
-    if (!cands.length) { say('Add at least one candidate with CV text.', true); return; }
+  /* ---- scoring helpers ---- */
 
-    var btn = $('run');
-    btn.disabled = true;
-    say('Screening ' + cands.length + ' candidate(s)… this can take up to a minute.');
-
-    var list = null, usedAi = false, failMsg = '';
-    try {
-      var resp = await fetch('/api/screen', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requirements: reqs, candidates: cands })
-      });
-      var data = await resp.json().catch(function () { return {}; });
-      if (resp.ok && data.results) {
-        list = data.results;
-        usedAi = true;
-      } else {
-        throw new Error(data.error || 'Server error ' + resp.status);
-      }
-    } catch (err) {
-      failMsg = err.message;
-    }
-
-    if (!list) list = Engine.demoScreen(reqs, cands);
-
-    var candMap = {};
-    cands.forEach(function (c) { candMap[c.id] = c; });
-    list.forEach(function (res) {
-      var orig = candMap[res.id] || {};
-      res.phone = orig.phone || '';
-      res.email = orig.email || '';
-      res.consent = Boolean(orig.consent);
-      res.roadmapProfile = orig.roadmapProfile || null;
-      res.rankingPercentile = orig.rankingPercentile || null;
-      res.interviewSummary = orig.interviewSummary || null;
-      res.interviewConfidence = orig.interviewConfidence || null;
-      res.interviewTranscript = orig.interviewTranscript || null;
+  function rowsFor() {
+    var reqs = cache.job.requirements, sig = reqSig(reqs);
+    var rows = cache.cands.map(function (c) {
+      var sc = c.screen ? Engine.score(reqs, c.screen.checks) : null;
+      return { c: c, sc: sc, sug: sc ? Engine.suggestion(sc) : null, stale: Boolean(c.screen && c.screen.reqSig !== sig) };
     });
+    rows.sort(function (a, b) {
+      if (a.sc && !b.sc) return -1;
+      if (!a.sc && b.sc) return 1;
+      if (a.sc && b.sc) return b.sc.now - a.sc.now || b.sc.potential - a.sc.potential || a.c.name.localeCompare(b.c.name);
+      return String(b.c.createdAt).localeCompare(String(a.c.createdAt));
+    });
+    return rows;
+  }
 
-    state.out = { list: list, reqs: reqs, usedAi: usedAi, failMsg: failMsg };
-    state.decisions = {};
-    btn.disabled = false;
-    say('Done. ' + list.length + ' candidate(s) ranked below.');
-    renderResults();
+  function needsScreen() {
+    var sig = reqSig(cache.job.requirements);
+    return cache.cands.filter(function (c) { return !c.screen || c.screen.reqSig !== sig; });
   }
 
   function barHtml(reqs, checks, label) {
-    var byId = {};
-    checks.forEach(function (k) { byId[k.reqId] = k; });
+    var by = {};
+    (checks || []).forEach(function (k) { by[k.reqId] = k; });
     var segs = reqs.map(function (r) {
-      var k = byId[r.id] || { status: 'not_stated' };
-      return '<span class="seg s-' + k.status + '" style="flex:' + Engine.weightOf(r) + '" title="' +
-        esc(r.text + ': ' + STATE_LABEL[k.status]) + '"></span>';
+      var st = checks ? (by[r.id] ? by[r.id].status : 'not_stated') : 'none';
+      return '<span class="seg s-' + st + '" style="flex:' + Engine.weightOf(r) + '" title="' + esc(r.text + (checks ? ': ' + STATE_LABEL[st] : '')) + '"></span>';
     }).join('');
     return '<div class="bar" role="img" aria-label="' + esc(label) + '">' + segs + '</div>';
   }
 
-  function renderResults(quiet) {
-    var out = state.out;
-    var reqs = out.reqs;
+  /* ---- applicants tab ---- */
 
-    var rows = out.list.map(function (r) {
-      var sc = Engine.score(reqs, r.checks);
-      return { r: r, sc: sc, sug: Engine.suggestion(sc) };
-    }).sort(function (a, b) {
-      return b.sc.now - a.sc.now || b.sc.potential - a.sc.potential || a.r.name.localeCompare(b.r.name);
-    });
+  function applicantsTab(candId) {
+    var j = cache.job, reqs = j.requirements;
+    var rows = rowsFor();
+    var need = needsScreen();
+    var out = '';
 
-    var fb = $('fallback');
-    if (out.failMsg) {
-      fb.hidden = false;
-      fb.textContent = 'The AI could not be used this time (' + String(out.failMsg).replace(/[.\s]+$/, '') + '), so these are keyword-match results. Quotes come straight from the CV, but treat the ranking as a rougher first pass.';
-    } else {
-      fb.hidden = true;
+    if (!rows.length && !ui.showAdd) {
+      var link = ScoutData.applyLink(j);
+      return '<div class="empty-state"><h2>No applicants yet.</h2>' +
+        '<p>Send candidates this role&rsquo;s apply link. They upload a CV, confirm their details, and appear here ranked against your requirements.</p>' +
+        '<div class="link-box"><code>' + esc(link) + '</code><button class="btn sm" data-act="copy-apply">' + icon('copy') + ' Copy</button></div>' +
+        (app.mode === 'local' ? '<div class="banner info" style="margin-top:16px"><span><strong>Heads up:</strong> this site is saving to this browser only, so applications must be made in this same browser. See Share to turn on shared storage.</span></div>' : '') +
+        '<div class="row"><button class="btn secondary" data-act="toggle-add">Add a CV manually</button>' +
+        '<a class="btn ghost" href="' + esc(link) + '" target="_blank" rel="noopener">Preview as a candidate</a></div></div>';
     }
 
-    // Update filter counts
-    if ($('count-all')) $('count-all').textContent = rows.length;
-    if ($('count-strong')) $('count-strong').textContent = rows.filter(function (x) { return x.sug.code === 'strong'; }).length;
-    if ($('count-look')) $('count-look').textContent = rows.filter(function (x) { return x.sug.code === 'look'; }).length;
-    if ($('count-skip')) $('count-skip').textContent = rows.filter(function (x) { return x.sug.code === 'skip'; }).length;
-
-    var filteredRows = state.activeFilter === 'all'
-      ? rows
-      : rows.filter(function (x) { return x.sug.code === state.activeFilter; });
-
-    if (!filteredRows.length) {
-      $('ranking').innerHTML = '<li class="cand-empty" style="padding:28px;text-align:center;color:var(--muted)">No candidates match the selected &ldquo;' + esc(state.activeFilter) + '&rdquo; filter.</li>';
-    } else {
-      $('ranking').innerHTML = filteredRows.map(function (row, i) {
-        var r = row.r, sc = row.sc, sug = row.sug;
-        var byId = {};
-        r.checks.forEach(function (k) { byId[k.reqId] = k; });
-
-        var mustReqs = reqs.filter(function (q) { return q.weight === 'must'; });
-        var niceReqs = reqs.filter(function (q) { return q.weight === 'nice'; });
-        var mustMet = r.checks.filter(function (k) {
-          var mq = byId[k.reqId];
-          return mq && mq.weight === 'must' && k.status === 'met';
-        }).length;
-        var niceMet = r.checks.filter(function (k) {
-          var mq = byId[k.reqId];
-          return mq && mq.weight === 'nice' && k.status === 'met';
-        }).length;
-
-        var breakdownHtml = '<div class="breakdown-pill">' +
-          '<span><strong>Must:</strong> ' + mustMet + '/' + mustReqs.length + '</span>' +
-          '&bull; <span><strong>Nice:</strong> ' + niceMet + '/' + niceReqs.length + '</span>' +
-        '</div>';
-
-        var trs = reqs.map(function (req) {
-          var k = byId[req.id] || { status: 'not_stated', evidence: '', note: '' };
-          return '<tr>' +
-            '<td class="req-text">' + esc(req.text) + (req.weight === 'nice' ? ' <small>(nice to have)</small>' : '') + '</td>' +
-            '<td><span class="state ' + k.status + '"><span class="seg s-' + k.status + '"></span>' + STATE_LABEL[k.status] + '</span></td>' +
-            '<td>' + (k.evidence ? '<p class="quote">' + esc(k.evidence) + '</p>' : '') +
-              (k.note ? '<p class="note">' + esc(k.note) + '</p>' : '') + '</td></tr>';
-        }).join('');
-
-        var qs = (r.questions || []).length
-          ? '<h4>Questions to ask</h4><ul class="questions">' + r.questions.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul>'
-          : '';
-
-        var label = sc.now + ' percent match. ' + sc.counts.met + ' of ' + reqs.length + ' requirements stated.';
-        var up = sc.potential > sc.now ? '<small>up to ' + sc.potential + '% if verified</small>' : '';
-
-        // Contact Buttons (Phase 2)
-        var contactHtml = '';
-        var isRevealed = Boolean(state.revealedContacts[r.id]);
-        if (r.consent) {
-          var firstName = (r.name || '').split(/\s+/)[0] || 'there';
-          var recName = ($('rec-name') && $('rec-name').value) || 'Recruiter';
-          var recCompany = ($('rec-company') && $('rec-company').value) || 'Our Team';
-          var recRole = ($('rec-role') && $('rec-role').value) || 'Backend Engineer';
-          var tpl = ($('rec-template') && $('rec-template').value) ||
-            "Hi {first name}, I'm {recruiter name} from {company}. I saw your CV for the {role} role and would like a quick chat. Are you free this week?";
-
-          var vars = { firstName: firstName, recruiterName: recName, company: recCompany, role: recRole };
-          var waUrl = Engine.buildWhatsAppLink(r.phone, tpl, vars);
-          var telUrl = Engine.buildTelLink(r.phone);
-          var mailUrl = Engine.buildMailtoLink(r.email, 'Interview for ' + recRole + ' role at ' + recCompany,
-            Engine.renderTemplate(tpl, vars));
-
-          var linksHtml = isRevealed ? (
-            '<div class="contact-panel">' +
-              '<p class="contact-info"><strong>Phone:</strong> ' + esc(r.phone || 'Not provided') + ' &bull; <strong>Email:</strong> ' + esc(r.email || 'Not provided') + '</p>' +
-              '<div class="contact-links">' +
-                (waUrl ? '<a href="' + esc(waUrl) + '" target="_blank" rel="noopener noreferrer" class="contact-btn wa"><svg class="ic" aria-hidden="true"><use href="#i-message"/></svg> WhatsApp</a>' : '') +
-                (telUrl ? '<a href="' + esc(telUrl) + '" class="contact-btn tel"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg> Call</a>' : '') +
-                (mailUrl ? '<a href="' + esc(mailUrl) + '" class="contact-btn mail"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg> Email</a>' : '') +
-              '</div>' +
-            '</div>'
-          ) : '';
-
-          contactHtml = '<div class="contact-block">' +
-            '<button type="button" class="btn-quiet toggle-contact" data-act="toggle-contact" data-id="' + esc(r.id) + '">' +
-              (isRevealed ? 'Hide contact details' : 'Show contact details') +
-            '</button>' +
-            linksHtml +
-          '</div>';
-        } else {
-          contactHtml = '<div class="contact-block"><span class="contact-withheld"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg> Contact details withheld by candidate</span></div>';
-        }
-
-        // Interview summary & transcript (Phase 3 & 4)
-        var interviewHtml = '';
-        var hasTranscript = Boolean(r.interviewTranscript && r.interviewTranscript.length);
-        if (r.interviewSummary || hasTranscript) {
-          interviewHtml = '<div class="interview-summary-card">' +
-            '<h4>AI Verification Interview</h4>' +
-            (r.interviewConfidence ? '<span class="tag ' + (r.interviewConfidence === 'high' ? 'strong' : 'look') + '">Confidence: ' + esc(r.interviewConfidence) + '</span>' : '') +
-            (r.interviewSummary ? '<p class="interview-text">' + esc(r.interviewSummary) + '</p>' : '') +
-            (hasTranscript ? '<button type="button" class="btn-quiet btn-transcript" data-act="view-transcript" data-id="' + esc(r.id) + '" style="margin-top:8px"><svg class="ic" aria-hidden="true"><use href="#i-quote"/></svg> View interview transcript</button>' : '') +
-          '</div>';
-        }
-
-        var roadmapBtn = r.roadmapProfile ? (
-          '<div style="margin:10px 0">' +
-            '<button type="button" class="btn-quiet btn-roadmap" data-act="view-roadmap" data-id="' + esc(r.id) + '">' +
-              '<svg class="ic" aria-hidden="true"><use href="#i-briefcase"/></svg> View Career Roadmap Profile' +
-            '</button>' +
-          '</div>'
-        ) : '';
-
-        var prevEl = document.querySelector('details.person[data-id="' + r.id + '"]');
-        var wasOpen = Boolean(state.revealedContacts[r.id] || (prevEl && prevEl.open));
-
-        var decided = state.decisions[r.id] || '';
-        var rankBadge = r.rankingPercentile
-          ? '<span class="tag ' + (r.rankingPercentile.includes('5%') ? 'strong' : 'look') + '" style="margin-left:4px">🏆 ' + esc(r.rankingPercentile) + '</span>'
-          : '';
-
-        return '<li>' +
-          '<details class="person" data-id="' + esc(r.id) + '"' + (wasOpen ? ' open' : '') + '>' +
-            '<summary>' +
-              '<span class="rank">' + (i + 1) + '</span>' +
-              '<span class="who"><span class="avatar" aria-hidden="true">' + esc(initials(r.name)) + '</span>' +
-                '<span class="who-text"><strong>' + esc(r.name) + '</strong>' +
-                  '<span class="who-meta"><span class="tag ' + sug.code + '">' + esc(sug.text) + '</span>' +
-                  rankBadge +
-                  '<span class="decided" data-for="' + esc(r.id) + '">' + (decided ? esc(DECISION_LABEL[decided]) : '') + '</span></span>' +
-                  breakdownHtml +
-                '</span></span>' +
-              barHtml(reqs, r.checks, label) +
-              '<span class="pct"><b>' + sc.now + '%</b>' + up + '</span>' +
-              '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>' +
-            '</summary>' +
-            '<div class="detail">' +
-              '<p class="suggest">' + esc(r.summary || '') + '</p>' +
-              '<table class="checks"><thead><tr><th>Requirement</th><th>Status</th><th>Evidence from the CV</th></tr></thead><tbody>' + trs + '</tbody></table>' +
-              qs +
-              roadmapBtn +
-              interviewHtml +
-              '<div class="detail-foot">' +
-                contactHtml +
-                '<div class="pick" role="group" aria-label="Your decision for ' + esc(r.name) + '"><span class="label">Your decision</span>' +
-                  ['shortlist', 'ask', 'pass'].map(function (v) {
-                    return '<button type="button" data-act="decide" data-id="' + esc(r.id) + '" data-val="' + v + '" aria-pressed="' + (decided === v) + '">' + DECISION_LABEL[v] + '</button>';
-                  }).join('') +
-                '</div>' +
-              '</div>' +
-            '</div>' +
-          '</details></li>';
-      }).join('');
+    // banners
+    if (ui.screening) out += '<div class="banner info" role="status" style="margin-bottom:16px"><span><strong>Screening&hellip;</strong> ' + esc(ui.screening) + '</span></div>';
+    else if (need.length) {
+      var anyStale = need.some(function (c) { return c.screen; });
+      out += '<div class="banner" style="margin-bottom:16px"><span><strong>' + plural(need.length, 'applicant') + '</strong> ' + (anyStale ? 'need screening again because the requirements changed.' : (need.length === 1 ? 'has' : 'have') + ' not been screened yet.') + '</span>' +
+        '<button class="btn sm" data-act="screen">Screen ' + need.length + '</button></div>';
     }
+    if (ui.notice) out += '<div class="banner bad" role="status" style="margin-bottom:16px"><span>' + esc(ui.notice) + '</span></div>';
 
-    var cov = Engine.coverage(reqs, out.list).sort(function (a, b) {
-      return a.counts.met - b.counts.met || b.counts.not_met - a.counts.not_met;
-    });
-    $('coverage').innerHTML = cov.map(function (c) {
-      var t = c.total || 1;
-      var segs = ['met', 'not_stated', 'not_met'].filter(function (s) { return c.counts[s]; }).map(function (s) {
-        return '<span class="seg s-' + s + '" style="flex:' + c.counts[s] + '" title="' + c.counts[s] + ' ' + STATE_LABEL[s].toLowerCase() + '"></span>';
-      }).join('');
-      var thin = c.counts.met / t <= 0.34;
-      return '<li><span class="req-text">' + esc(c.req.text) + '</span>' +
-        '<div class="bar" role="img" aria-label="' + c.counts.met + ' of ' + c.total + ' candidates state this">' + segs + '</div>' +
-        '<span class="cov-count' + (thin ? ' thin' : '') + '">' + c.counts.met + ' of ' + c.total + ' state it</span></li>';
+    // toolbar
+    var counts = { all: rows.length, new: 0, shortlist: 0, ask: 0, pass: 0 };
+    rows.forEach(function (r) { counts[r.c.stage] = (counts[r.c.stage] || 0) + 1; });
+    var filters = ['all', 'new', 'shortlist', 'ask', 'pass'].map(function (f) {
+      return '<button type="button" data-act="filter" data-f="' + f + '" aria-pressed="' + (ui.filter === f) + '">' + (f === 'all' ? 'All' : STAGE_LABEL[f]) + '<span class="n">' + (counts[f] || 0) + '</span></button>';
     }).join('');
+    out += '<div class="toolbar"><div class="filters" role="group" aria-label="Filter applicants">' + filters + '</div>' +
+      '<div class="row"><button class="btn secondary sm" data-act="toggle-add">' + icon('plus') + ' Add a CV</button>' +
+      '<button class="btn secondary sm" data-act="refresh">Refresh</button>' +
+      '<button class="btn secondary sm" data-act="csv">' + icon('download') + ' CSV</button></div></div>';
 
-    var res = $('results');
-    res.hidden = false;
-    updateTally();
-    if (quiet) return;
-    var h = $('results-h');
-    h.tabIndex = -1;
-    res.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    h.focus({ preventScroll: true });
+    if (ui.showAdd) {
+      out += '<form class="stack" data-form="add-cv" style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--line)">' +
+        '<div class="field"><label class="label" for="add-name">Name</label><input id="add-name" type="text" maxlength="80" placeholder="Candidate name"></div>' +
+        '<div class="field"><label class="label" for="add-cv">CV text</label><textarea id="add-cv" rows="6" maxlength="12000" placeholder="Paste the CV as plain text" required></textarea></div>' +
+        '<div class="row"><button type="submit" class="btn">Add candidate</button><button type="button" class="btn ghost" data-act="toggle-add">Cancel</button></div></form>';
+    }
+
+    var shown = rows.filter(function (r) { return ui.filter === 'all' || r.c.stage === ui.filter; });
+    var sel = null;
+    if (candId) sel = rows.filter(function (r) { return r.c.id === candId; })[0] || null;
+    if (!sel && !candId && isWide()) sel = shown[0] || null;
+
+    var list = shown.length ? '<ol class="cand-list" aria-label="Applicants, best match first">' + shown.map(function (r, i) {
+      var c = r.c;
+      var meta = '';
+      if (c.stage !== 'new') meta += '<span class="chip ' + (c.stage === 'shortlist' ? 'ok' : c.stage === 'ask' ? 'warn' : '') + '">' + STAGE_LABEL[c.stage] + '</span>';
+      if (c.source === 'manual') meta += '<span class="chip">Added by you</span>';
+      if (c.interview) meta += '<span class="chip info">Interviewed</span>';
+      if (c.contactedAt) meta += '<span class="chip">Contacted</span>';
+      if (r.stale) meta += '<span class="chip warn">Out of date</span>';
+      var label = r.sc ? r.sc.now + ' percent match' : 'Not screened yet';
+      return '<li><a class="cand-item" href="#/job/' + esc(j.id) + '/applicants/' + esc(c.id) + '"' + (sel && sel.c.id === c.id ? ' aria-current="true"' : '') + '>' +
+        '<span class="rk">' + (r.sc ? i + 1 : '&ndash;') + '</span><span class="nm">' + esc(c.name) + '</span>' +
+        (r.sc ? '<span class="pc">' + r.sc.now + '%</span>' : '<span class="pc none">Not screened</span>') +
+        (meta ? '<span class="meta">' + meta + '</span>' : '') +
+        barHtml(reqs, r.sc ? c.screen.checks : null, label) + '</a></li>';
+    }).join('') + '</ol>' : '<p class="muted" style="padding:24px 0">No applicants in this stage.</p>';
+
+    var legend = '<ul class="legend" aria-label="How to read a match bar" style="margin-top:16px"><li><span class="seg s-met"></span> Stated</li><li><span class="seg s-not_stated"></span> Not stated, verify</li><li><span class="seg s-not_met"></span> CV says otherwise</li></ul>';
+
+    out += '<div class="split' + (candId && sel ? ' has-selection' : '') + '"><div class="cand-col">' + list + legend + '</div>' +
+      '<div class="detail-col">' + (sel ? detailPane(sel) : '<div class="detail"><div class="detail-empty"><div class="display">Pick an applicant</div><p>Select a name to see the evidence, contact options and your decision.</p></div></div>') + '</div></div>';
+
+    // coverage
+    var screened = rows.filter(function (r) { return r.sc && !r.stale; });
+    if (screened.length >= 2) {
+      var cov = Engine.coverage(reqs, screened.map(function (r) { return { checks: r.c.screen.checks }; })).sort(function (a, b) {
+        return a.counts.met - b.counts.met || b.counts.not_met - a.counts.not_met;
+      });
+      out += '<section class="coverage"><h2>Where the pool is thin</h2><p class="hint" style="margin-top:4px">How many screened candidates state each requirement, hardest to find first. Search harder for the top rows.</p><ul class="cov-list">' +
+        cov.map(function (c) {
+          var segs = ['met', 'not_stated', 'not_met'].filter(function (s) { return c.counts[s]; }).map(function (s) {
+            return '<span class="seg s-' + s + '" style="flex:' + c.counts[s] + '"></span>';
+          }).join('');
+          var thin = c.counts.met / (c.total || 1) <= 0.34;
+          return '<li><span>' + esc(c.req.text) + '</span><div class="bar" role="img" aria-label="' + c.counts.met + ' of ' + c.total + ' candidates state this">' + segs + '</div><span class="cnt' + (thin ? ' thin' : '') + '">' + c.counts.met + ' of ' + c.total + ' state it</span></li>';
+        }).join('') + '</ul></section>';
+    }
+    return out;
   }
 
-  function updateTally() {
-    var n = state.out.list.length;
-    var c = { shortlist: 0, ask: 0, pass: 0 };
-    Object.keys(state.decisions).forEach(function (id) { c[state.decisions[id]]++; });
-    var undecided = n - c.shortlist - c.ask - c.pass;
-    $('tally').textContent = c.shortlist + ' shortlisted, ' + c.ask + ' to ask first, ' + c.pass + ' passed, ' + undecided + ' undecided';
+  function contactUrls(c) {
+    var o = getOutreach(), j = cache.job;
+    var vars = {
+      firstName: (c.name || '').split(/\s+/)[0] || 'there',
+      recruiterName: o.name || 'a recruiter',
+      company: o.company || j.company || 'our team',
+      role: j.title
+    };
+    return {
+      wa: Engine.buildWhatsAppLink(c.phone, o.template, vars),
+      tel: Engine.buildTelLink(c.phone),
+      mail: Engine.buildMailtoLink(c.email, 'Quick chat about the ' + j.title + ' role', Engine.renderTemplate(o.template, vars))
+    };
   }
 
-  $('ranking').addEventListener('click', function (e) {
-    var rmBtn = e.target.closest('button[data-act="view-roadmap"]');
-    if (rmBtn) {
-      openRoadmapModal(rmBtn.dataset.id);
-      return;
+  function detailPane(r) {
+    var c = r.c, j = cache.job, reqs = j.requirements, sc = r.sc;
+    var o = getOutreach();
+    var h = '<div class="detail"><div class="detail-inner">';
+
+    h += '<a class="crumb back-mobile" href="#/job/' + esc(j.id) + '/applicants">' + icon('arrow-left') + ' All applicants</a>';
+    h += '<div class="detail-top"><div><h2>' + esc(c.name) + '</h2><p class="muted small" style="margin-top:8px">' +
+      (c.location ? esc(c.location) + ' &middot; ' : '') + (c.source === 'manual' ? 'Added ' : 'Applied ') + esc(fmtDate(c.createdAt)) + '</p></div>' +
+      (sc ? '<div class="score">' + sc.now + '%' + (sc.potential > sc.now ? '<small>up to ' + sc.potential + '% if verified</small>' : '') + '</div>' : '<div class="muted small">Not screened yet</div>') + '</div>';
+
+    // evidence
+    if (sc) {
+      var by = {};
+      c.screen.checks.forEach(function (k) { by[k.reqId] = k; });
+      h += '<section><h3>Evidence</h3><div class="row" style="margin-bottom:12px"><span class="chip ' + (r.sug.code === 'strong' ? 'ok' : r.sug.code === 'gap' ? 'bad' : r.sug.code === 'verify' ? 'warn' : '') + '">' + esc(r.sug.text) + '</span>' +
+        (c.screen.usedAi ? '' : '<span class="chip">Keyword match</span>') + (r.stale ? '<span class="chip warn">Out of date</span>' : '') + '</div>' +
+        (c.screen.summary ? '<p class="note-line" style="margin-bottom:8px">' + esc(c.screen.summary) + '</p>' : '') +
+        '<div class="checks">' + reqs.map(function (q) {
+          var k = by[q.id] || { status: 'not_stated', evidence: '', note: '' };
+          return '<div class="check"><span class="rq">' + esc(q.text) + (q.weight === 'nice' ? ' <small>(nice to have)</small>' : '') + '</span>' +
+            '<span class="st ' + k.status + '"><span class="seg s-' + k.status + '"></span>' + STATE_LABEL[k.status] + '</span>' +
+            ((k.evidence || k.note) ? '<div class="ev">' + (k.evidence ? '<q>' + esc(k.evidence) + '</q>' : '') + (k.note ? '<span class="nt">' + esc(k.note) + '</span>' : '') + '</div>' : '') + '</div>';
+        }).join('') + '</div></section>';
+      if (c.screen.questions && c.screen.questions.length) {
+        h += '<section><h3>Questions to ask</h3><ul class="questions">' + c.screen.questions.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul></section>';
+      }
+    } else {
+      h += '<section><div class="banner"><span>This applicant has not been screened yet.</span><button class="btn sm" data-act="screen-one" data-id="' + esc(c.id) + '">Screen now</button></div></section>';
     }
 
-    var viewBtn = e.target.closest('button[data-act="view-transcript"]');
-    if (viewBtn) {
-      openTranscriptModal(viewBtn.dataset.id);
-      return;
+    // interview
+    if (c.interview && c.interview.summary) {
+      var iv = c.interview;
+      h += '<section><h3>AI interview summary</h3><div class="interview-box"><div><span class="chip ' + (iv.confidence === 'high' ? 'ok' : iv.confidence === 'low' ? 'bad' : 'warn') + '">Confidence: ' + esc(iv.confidence) + '</span></div><p>' + esc(iv.summary) + '</p>' +
+        (iv.confirmedReqs && iv.confirmedReqs.length ? '<div><strong>Confirmed:</strong> ' + iv.confirmedReqs.map(esc).join('; ') + '</div>' : '') +
+        (iv.openReqs && iv.openReqs.length ? '<div><strong>Still open:</strong> ' + iv.openReqs.map(esc).join('; ') + '</div>' : '') +
+        (iv.followUpQuestions && iv.followUpQuestions.length ? '<div><strong>Follow-ups:</strong><ul class="questions" style="margin-top:4px">' + iv.followUpQuestions.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul></div>' : '') +
+        '<p class="small muted">Written by AI from the candidate&rsquo;s own answers. Check it before relying on it.</p></div></section>';
     }
 
-    var toggleBtn = e.target.closest('button[data-act="toggle-contact"]');
-    if (toggleBtn) {
-      var cid = toggleBtn.dataset.id;
-      state.revealedContacts[cid] = !state.revealedContacts[cid];
-      renderResults(true);
-      var again = document.querySelector('button[data-act="toggle-contact"][data-id="' + cid + '"]');
-      if (again) again.focus();
+    // CV
+    h += '<section><details><summary class="link-btn" style="cursor:pointer">Read the full CV</summary><div style="margin-top:12px;white-space:pre-wrap;font-size:0.9rem;color:var(--ink-2);overflow-wrap:anywhere">' + esc(c.cv) + '</div></details>' +
+      ((c.links && (c.links.linkedin || c.links.github)) ? '<div class="row" style="margin-top:12px">' +
+        (c.links.linkedin ? '<a href="' + esc(c.links.linkedin) + '" target="_blank" rel="noopener noreferrer">LinkedIn</a>' : '') +
+        (c.links.github ? '<a href="' + esc(c.links.github) + '" target="_blank" rel="noopener noreferrer">GitHub or portfolio</a>' : '') + '</div>' : '') + '</section>';
+
+    // contact
+    h += '<section><h3>Contact</h3>';
+    if (c.source === 'manual') {
+      h += '<span class="contact-withheld">' + icon('lock') + ' Added by you, so no contact details are stored.</span>';
+    } else if (!c.consent) {
+      h += '<span class="contact-withheld">' + icon('lock') + ' The candidate chose to keep their contact details private.</span>';
+    } else if (!c.phone && !c.email) {
+      h += '<span class="contact-withheld">' + icon('lock') + ' The candidate agreed to share contact details but did not give any.</span>';
+    } else {
+      var open = Boolean(ui.revealed[c.id]);
+      h += '<div class="contact-panel"><div class="row"><button class="btn secondary sm" data-act="reveal" data-id="' + esc(c.id) + '">' + (open ? 'Hide contact details' : 'Show contact details') + '</button>' +
+        (c.contactedAt ? '<span class="chip">Contacted ' + esc(fmtDate(c.contactedAt)) + '</span>' : '') + '</div>';
+      if (open) {
+        var u = contactUrls(c);
+        h += '<p class="contact-info"><strong>Phone:</strong> ' + esc(c.phone || 'Not provided') + ' &nbsp; <strong>Email:</strong> ' + esc(c.email || 'Not provided') + '</p>' +
+          '<div class="contact-links">' +
+          (u.wa ? '<a class="contact-btn wa" data-contact="' + esc(c.id) + '" href="' + esc(u.wa) + '" target="_blank" rel="noopener noreferrer">' + icon('message') + ' WhatsApp</a>' : '') +
+          (u.tel ? '<a class="contact-btn tel" data-contact="' + esc(c.id) + '" href="' + esc(u.tel) + '">' + icon('phone') + ' Call</a>' : '') +
+          (u.mail ? '<a class="contact-btn mail" data-contact="' + esc(c.id) + '" href="' + esc(u.mail) + '">' + icon('mail') + ' Email</a>' : '') + '</div>' +
+          '<details class="msg-settings"><summary>Edit the message</summary><div class="grid">' +
+          '<div class="field"><label class="label" for="o-name">Your name</label><input id="o-name" type="text" maxlength="60" data-field="o-name" value="' + esc(o.name) + '" placeholder="Used as {recruiter name}"></div>' +
+          '<div class="field"><label class="label" for="o-company">Company</label><input id="o-company" type="text" maxlength="80" data-field="o-company" value="' + esc(o.company) + '" placeholder="' + esc(j.company || 'Used as {company}') + '"></div>' +
+          '<div class="field"><label class="label" for="o-template">Message</label><textarea id="o-template" rows="3" maxlength="400" data-field="o-template">' + esc(o.template) + '</textarea>' +
+          '<span class="hint">You can use {first name}, {recruiter name}, {company} and {role}.</span></div></div></details>';
+      }
+      h += '</div>';
+    }
+    h += '</section>';
+
+    // decision
+    h += '<section><h3>Your decision</h3><div class="stage-pick" role="group" aria-label="Your decision for ' + esc(c.name) + '">' +
+      ['shortlist', 'ask', 'pass'].map(function (s) {
+        return '<button type="button" data-act="stage" data-id="' + esc(c.id) + '" data-stage="' + s + '" aria-pressed="' + (c.stage === s) + '">' + STAGE_LABEL[s] + '</button>';
+      }).join('') + '</div><p class="hint" style="margin-top:8px">The AI only suggests. You decide. Click again to undo.</p>' +
+      '<div class="row" style="margin-top:20px"><button class="btn danger sm" data-act="remove-cand" data-id="' + esc(c.id) + '">Remove from this job</button></div></section>';
+
+    return h + '</div></div>';
+  }
+
+  /* ---- screening ---- */
+
+  async function screenCands(list) {
+    if (!list.length || ui.screening) return;
+    var j = cache.job;
+    var reqs = j.requirements.map(function (r) { return { id: r.id, text: r.text, weight: r.weight }; });
+    var sig = reqSig(j.requirements);
+    var CHUNK = 5, done = 0, usedAnyAi = false, failMsg = '';
+    ui.notice = null;
+
+    for (var i = 0; i < list.length; i += CHUNK) {
+      var chunk = list.slice(i, i + CHUNK);
+      ui.screening = 'Reading ' + Math.min(done + chunk.length, list.length) + ' of ' + list.length + '. This can take a little while with AI.';
+      rerender();
+      var payload = chunk.map(function (c) { return { id: c.id, name: c.name, cv: c.cv }; });
+      var results = null, usedAi = false;
+      if (app.ai) {
+        try {
+          var data = await postJson('/api/screen', { requirements: reqs, candidates: payload });
+          if (data.results) { results = data.results; usedAi = true; usedAnyAi = true; }
+        } catch (err) { failMsg = err.message; }
+      }
+      if (!results) results = Engine.demoScreen(reqs, payload);
+
+      var save = results.map(function (r) {
+        return { candId: r.id, screen: { reqSig: sig, usedAi: usedAi, at: new Date().toISOString(), summary: r.summary || '', checks: r.checks || [], questions: r.questions || [] } };
+      });
+      try { await call('screensSave', { jobId: j.id, key: cache.key, results: save }); }
+      catch (err) { ui.notice = 'Could not save screening results: ' + err.message; }
+      save.forEach(function (s) {
+        var c = cache.cands.filter(function (x) { return x.id === s.candId; })[0];
+        if (c) c.screen = s.screen;
+      });
+      done += chunk.length;
+    }
+    ui.screening = '';
+    if (failMsg) ui.notice = 'The AI could not be used for some applicants (' + failMsg.replace(/[.\s]+$/, '') + '), so those use keyword matching. Treat their ranking as a rougher first pass.';
+    else if (!usedAnyAi && !app.ai) ui.notice = null;
+    rerender();
+    toast('Screened ' + plural(done, 'applicant') + '.');
+  }
+
+  /* ---- other tabs ---- */
+
+  function requirementsTab() {
+    var e = edit, j = cache.job;
+    return '<div class="kv"><section><h2>The role</h2><div class="form-grid" style="margin-top:12px">' +
+      '<div class="field"><label class="label" for="e-title">Role title</label><input id="e-title" type="text" maxlength="100" data-field="edit.title" value="' + esc(e.title) + '"></div>' +
+      '<div class="field"><label class="label" for="e-company">Company</label><input id="e-company" type="text" maxlength="80" data-field="edit.company" value="' + esc(e.company) + '"></div></div>' +
+      '<div class="field" style="margin-top:16px"><label class="label" for="e-jd">Job description</label><textarea id="e-jd" rows="6" data-field="edit.jd">' + esc(e.jd) + '</textarea></div></section>' +
+      '<section><h2>Requirements</h2><p class="hint" style="margin:4px 0 12px">Applicants are ranked against these. If you change them, applicants are marked as needing a fresh screen.</p>' + reqEditor('edit', e.reqs) + '</section>' +
+      '<section><div class="field" style="max-width:16rem"><label class="label" for="e-status">Applications</label><select id="e-status" data-field="edit.status"><option value="open"' + (e.status === 'open' ? ' selected' : '') + '>Open</option><option value="closed"' + (e.status === 'closed' ? ' selected' : '') + '>Closed</option></select></div></section>' +
+      '<p id="edit-msg" class="field-msg error" role="alert"></p>' +
+      '<div class="row"><button class="btn lg" data-act="save-job">Save changes</button><a class="btn ghost" href="#/job/' + esc(j.id) + '/applicants">Cancel</a></div></div>';
+  }
+
+  function shareTab() {
+    var j = cache.job;
+    var applyUrl = ScoutData.applyLink(j);
+    var privateUrl = location.origin + '/hire#/job/' + j.id + '?key=' + cache.key;
+    return '<div class="kv">' +
+      '<section><h2>Apply link</h2><p class="hint">Send this to candidates. It shows the role and lets them apply.</p>' +
+      '<div class="link-box"><code>' + esc(applyUrl) + '</code><button class="btn sm" data-act="copy-apply">' + icon('copy') + ' Copy</button></div>' +
+      '<p style="margin-top:12px"><a href="' + esc(applyUrl) + '" target="_blank" rel="noopener">Preview as a candidate</a></p></section>' +
+      '<section><h2>Your private recruiter link</h2><p class="hint">Opens this job on another device. <strong>Anyone with this link can see the applicants</strong>, so keep it to yourself.</p>' +
+      '<div class="link-box"><code>' + esc(privateUrl) + '</code><button class="btn sm" data-act="copy-private">' + icon('copy') + ' Copy</button></div></section>' +
+      '<section><h2>Where applications are saved</h2>' +
+      (app.mode === 'remote'
+        ? '<p class="hint">Shared storage is on. Candidates can apply from any device and the applications reach you here.</p>'
+        : '<div class="banner info" style="margin-top:8px"><span><strong>This browser only.</strong> This site has no shared storage set up, so applications are saved in this browser. Candidates must apply in the same browser, which is fine for a demo. To receive applications from other devices, add a free Upstash Redis database (see the README) and redeploy.</span></div>') + '</section>' +
+      '<section><h2>Job status</h2><p class="hint">Closing stops new applications. Existing applicants stay.</p><div class="row" style="margin-top:12px">' +
+      '<button class="btn secondary" data-act="toggle-status">' + (j.status === 'open' ? 'Close applications' : 'Reopen applications') + '</button>' +
+      '<button class="btn danger" data-act="forget" data-id="' + esc(j.id) + '" data-then="home">Remove from this browser</button></div></section></div>';
+  }
+
+  /* ================================================================ EVENTS */
+
+  var acts = {
+    sample: function (t) { makeSample(t).catch(function (e) { toast(e.message); t.disabled = false; }); },
+    forget: function (t) {
+      ScoutData.forgetJob(t.dataset.id);
+      cache = null;
+      toast('Removed from this browser. The job itself is not deleted.');
+      if (t.dataset.then === 'home') location.hash = '#/'; else route();
+    },
+    'wiz-mode': function (t) { draft.mode = t.dataset.mode; newJobView(); },
+    'wiz-skip': function () { draft.step = 2; draft.note = ''; newJobView(); },
+    'wiz-back': function () { draft.step = 1; newJobView(); },
+    'wiz-generate': function () { generate(); },
+    'wiz-extract': function () { extractFromPaste(); },
+    'wiz-sample-jd': function () { draft.jd = Samples.JOB; newJobView(); },
+    'wiz-create': function () { createJob(); },
+    'chat-example': function () {
+      var ta = $('chat-input');
+      ta.value = 'We are a seed-stage fintech startup in Lagos building cross-border B2B payments. We need a Founding Backend Engineer with 3+ years in Python or Go, deep PostgreSQL knowledge, who has shipped high-volume APIs to real customers.';
+      ta.focus();
+    },
+    'req-weight': function (t) {
+      var r = listFor(t.dataset.list)[+t.dataset.i];
+      if (r) { r.weight = r.weight === 'nice' ? 'must' : 'nice'; repaintReqs(t.dataset.list); }
+    },
+    'req-del': function (t) { listFor(t.dataset.list).splice(+t.dataset.i, 1); repaintReqs(t.dataset.list); },
+    'req-add': function (t) { addReq(t.dataset.list); },
+    'copy-apply': function () { copyText(ScoutData.applyLink(cache.job), 'Apply link copied'); },
+    'copy-private': function () { copyText(location.origin + '/hire#/job/' + cache.job.id + '?key=' + cache.key, 'Private link copied'); },
+    filter: function (t) { ui.filter = t.dataset.f; focusSel = 'button[data-f="' + t.dataset.f + '"]'; rerender(); },
+    'toggle-add': function () { ui.showAdd = !ui.showAdd; rerender(); if (ui.showAdd) { var n = $('add-name'); if (n) n.focus(); } },
+    refresh: async function () {
+      try { cache = await loadJob(cache.id); rerender(); toast('Up to date'); } catch (e) { toast(e.message); }
+    },
+    screen: function () { screenCands(needsScreen()); },
+    'screen-one': function (t) {
+      var c = cache.cands.filter(function (x) { return x.id === t.dataset.id; })[0];
+      if (c) screenCands([c]);
+    },
+    reveal: function (t) { ui.revealed[t.dataset.id] = !ui.revealed[t.dataset.id]; focusSel = 'button[data-act="reveal"]'; rerender(); },
+    stage: function (t) {
+      var c = cache.cands.filter(function (x) { return x.id === t.dataset.id; })[0];
+      if (!c) return;
+      var prev = c.stage;
+      c.stage = c.stage === t.dataset.stage ? 'new' : t.dataset.stage;
+      focusSel = 'button[data-act="stage"][data-stage="' + t.dataset.stage + '"]';
+      rerender();
+      call('candidatePatch', { jobId: cache.id, key: cache.key, candId: c.id, patch: { stage: c.stage } }).catch(function (e) {
+        c.stage = prev; rerender(); toast('Could not save: ' + e.message);
+      });
+    },
+    'remove-cand': function (t) {
+      var c = cache.cands.filter(function (x) { return x.id === t.dataset.id; })[0];
+      if (!c || !confirm('Remove ' + c.name + ' from this job? This deletes their application.')) return;
+      call('candidateRemove', { jobId: cache.id, key: cache.key, candId: c.id }).then(function () {
+        cache.cands = cache.cands.filter(function (x) { return x.id !== c.id; });
+        location.hash = '#/job/' + cache.id + '/applicants';
+        toast('Removed');
+      }).catch(function (e) { toast(e.message); });
+    },
+    csv: function () { exportCsv(); },
+    'save-job': function () { saveJob(); },
+    'toggle-status': function () {
+      var next = cache.job.status === 'open' ? 'closed' : 'open';
+      call('jobUpdate', { id: cache.id, key: cache.key, patch: { status: next } }).then(function (r) {
+        cache.job = r.job; rerender(); toast(next === 'open' ? 'Applications reopened' : 'Applications closed');
+      }).catch(function (e) { toast(e.message); });
+    }
+  };
+
+  function addReq(listName) {
+    var inp = $('new-req-' + listName);
+    var text = inp.value.trim();
+    if (!text) { inp.focus(); return; }
+    listFor(listName).push({ id: uid(), text: text, weight: 'must' });
+    inp.value = '';
+    repaintReqs(listName);
+    inp.focus();
+  }
+
+  view.addEventListener('click', function (e) {
+    var contact = e.target.closest('a[data-contact]');
+    if (contact && cache) {
+      var c = cache.cands.filter(function (x) { return x.id === contact.dataset.contact; })[0];
+      if (c) {
+        c.contactedAt = new Date().toISOString();
+        call('candidatePatch', { jobId: cache.id, key: cache.key, candId: c.id, patch: { contactedAt: c.contactedAt } }).catch(function () { /* non-critical */ });
+        setTimeout(rerender, 300);
+      }
       return;
     }
-
-    var btn = e.target.closest('button[data-act="decide"]');
-    if (!btn) return;
-    var id = btn.dataset.id, val = btn.dataset.val;
-    if (state.decisions[id] === val) delete state.decisions[id]; else state.decisions[id] = val;
-    var group = btn.parentNode.querySelectorAll('button[data-act="decide"]');
-    Array.prototype.forEach.call(group, function (b) {
-      b.setAttribute('aria-pressed', String(state.decisions[id] === b.dataset.val));
-    });
-    var tag = document.querySelector('.decided[data-for="' + id + '"]');
-    if (tag) tag.textContent = state.decisions[id] ? DECISION_LABEL[state.decisions[id]] : '';
-    updateTally();
+    var t = e.target.closest('[data-act]');
+    if (t && acts[t.dataset.act]) acts[t.dataset.act](t, e);
   });
 
-  function openTranscriptModal(candId) {
-    var modal = $('transcript-modal');
-    if (!modal) return;
-    var cand = state.out && state.out.list.find(function (c) { return c.id === candId; });
-    if (!cand) return;
-
-    $('dialog-title').textContent = 'Interview Transcript: ' + (cand.name || 'Candidate');
-    var content = $('dialog-content');
-
-    var transcript = cand.interviewTranscript || [];
-    if (!transcript.length && cand.interviewSummary) {
-      content.innerHTML = '<div class="interview-summary-card"><h4>Verified Summary</h4><p class="interview-text">' + esc(cand.interviewSummary) + '</p></div>';
-    } else if (!transcript.length) {
-      content.innerHTML = '<p class="hint" style="padding:16px;text-align:center">No transcript messages recorded for this candidate.</p>';
-    } else {
-      content.innerHTML = transcript.map(function (m) {
-        var isAi = m.role === 'ai';
-        return '<div class="transcript-bubble ' + (isAi ? 'ai' : 'candidate') + '">' +
-          '<strong>' + (isAi ? 'AI Interviewer' : esc(cand.name || 'Candidate')) + '</strong>' +
-          '<span>' + esc(m.text) + '</span>' +
-        '</div>';
-      }).join('');
+  view.addEventListener('input', function (e) {
+    var t = e.target, f = t.dataset.field;
+    if (!f) return;
+    if (f === 'req-text') { var r = listFor(t.dataset.list)[+t.dataset.i]; if (r) r.text = t.value; return; }
+    if (f.indexOf('draft.') === 0) { draft[f.slice(6)] = t.value; return; }
+    if (f.indexOf('edit.') === 0 && edit) { edit[f.slice(5)] = t.value; return; }
+    if (f === 'o-name' || f === 'o-company' || f === 'o-template') {
+      var o = getOutreach();
+      if (f === 'o-name') o.name = t.value; else if (f === 'o-company') o.company = t.value; else o.template = t.value || DEFAULT_TEMPLATE;
+      saveOutreach(o);
+      refreshContactLinks();
     }
+  });
+  view.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.dataset.field === 'edit.status' && edit) edit.status = t.value;
+  });
 
-    modal.hidden = false;
-  }
-
-  function closeTranscriptModal() {
-    var modal = $('transcript-modal');
-    if (modal) modal.hidden = true;
-  }
-
-  if ($('btn-close-dialog')) $('btn-close-dialog').addEventListener('click', closeTranscriptModal);
-  if ($('btn-close-dialog-2')) $('btn-close-dialog-2').addEventListener('click', closeTranscriptModal);
-  if ($('transcript-modal')) {
-    $('transcript-modal').addEventListener('click', function (e) {
-      if (e.target === this) closeTranscriptModal();
-    });
-  }
-
-  // Candidate Career Roadmap Modal
-  function openRoadmapModal(candId) {
-    var modal = $('roadmap-modal');
-    if (!modal) return;
-    var cand = (state.out && state.out.list.find(function (c) { return c.id === candId; })) ||
-               state.cands.find(function (c) { return c.id === candId; });
-    if (!cand) return;
-
-    var rm = cand.roadmapProfile;
-    if (!rm) {
-      rm = {
-        name: cand.name || 'Candidate',
-        headline: cand.role || 'Applicant Profile',
-        summary: cand.cv ? cand.cv.slice(0, 300) + '...' : 'Candidate profile submitted via portal.',
-        roadmap: [{ role: 'Applicant', company: 'Candidate Record', duration: 'Recent', highlights: ['Candidate submitted CV to portal'] }],
-        education: [],
-        skills: { General: ['Applicant'] }
-      };
-    }
-    $('rm-dialog-title').textContent = (rm.name || cand.name || 'Candidate') + ' — Career Roadmap Profile';
-    var content = $('rm-dialog-content');
-
-    var contactLinks = [];
-    if (rm.location) contactLinks.push('<span>📍 ' + esc(rm.location) + '</span>');
-    if (rm.email) contactLinks.push('<span>✉ ' + esc(rm.email) + '</span>');
-    if (rm.phone) contactLinks.push('<span>📞 ' + esc(rm.phone) + '</span>');
-    if (rm.links && rm.links.linkedin) contactLinks.push('<a href="' + esc(rm.links.linkedin) + '" target="_blank">LinkedIn</a>');
-    if (rm.links && rm.links.github) contactLinks.push('<a href="' + esc(rm.links.github) + '" target="_blank">GitHub</a>');
-
-    var timelineHtml = (rm.roadmap || []).map(function (item) {
-      var bullets = (item.highlights || []).map(function (h) { return '<li>' + esc(h) + '</li>'; }).join('');
-      var scale = item.scale ? '<span class="timeline-scale">⚡ ' + esc(item.scale) + '</span>' : '';
-      return '<div class="timeline-item">' +
-        '<div class="timeline-head">' +
-          '<div><span class="timeline-role">' + esc(item.role) + '</span> <span class="timeline-company">@ ' + esc(item.company) + '</span></div>' +
-          '<span class="timeline-duration">' + esc(item.duration) + '</span>' +
-        '</div>' +
-        scale +
-        '<ul class="timeline-bullets">' + bullets + '</ul>' +
-      '</div>';
-    }).join('');
-
-    var educationHtml = (rm.education || []).map(function (ed) {
-      return '<div class="education-card">' +
-        '<div class="education-school">🎓 ' + esc(ed.school) + '</div>' +
-        '<div class="education-degree">' + esc(ed.degree) + ' in ' + esc(ed.field) + '</div>' +
-        '<div class="education-year">' + esc(ed.year) + (ed.details ? ' &bull; ' + esc(ed.details) : '') + '</div>' +
-      '</div>';
-    }).join('');
-
-    var skillsHtml = '';
-    if (rm.skills) {
-      skillsHtml = Object.keys(rm.skills).map(function (cat) {
-        var tags = (rm.skills[cat] || []).map(function (t) { return '<span class="skill-pill">' + esc(t) + '</span>'; }).join('');
-        if (!tags) return '';
-        return '<div class="skill-row"><span class="skill-category">' + esc(cat) + '</span><div class="skill-tags">' + tags + '</div></div>';
-      }).join('');
-    }
-
-    content.innerHTML = '<div class="roadmap-profile" style="margin:0;padding:0;box-shadow:none;border:none">' +
-      '<div class="roadmap-header" style="margin-bottom:14px;padding-bottom:12px">' +
-        '<div>' +
-          '<h3 style="margin-bottom:4px">' + esc(rm.name || cand.name) + '</h3>' +
-          '<p class="roadmap-headline">' + esc(rm.headline || 'Software Engineer') + '</p>' +
-          '<div class="roadmap-contacts">' + contactLinks.join(' &bull; ') + '</div>' +
-        '</div>' +
-      '</div>' +
-      (rm.summary ? '<p style="color:var(--ink-2);font-size:0.92rem;margin-bottom:16px">' + esc(rm.summary) + '</p>' : '') +
-      '<h4 class="roadmap-section-title"><svg class="ic"><use href="#i-briefcase"/></svg> Career Roadmap & Experience</h4>' +
-      '<div class="timeline">' + timelineHtml + '</div>' +
-      '<h4 class="roadmap-section-title"><svg class="ic"><use href="#i-file"/></svg> Education & Schools Attended</h4>' +
-      '<div class="education-grid">' + educationHtml + '</div>' +
-      '<h4 class="roadmap-section-title"><svg class="ic"><use href="#i-check"/></svg> Technical Skills & Tools</h4>' +
-      '<div class="skills-taxonomy">' + skillsHtml + '</div>' +
-      (cand.cv ?
-        '<details class="cand-raw-cv-details" style="margin-top:20px;border-top:1px solid var(--line);padding-top:14px">' +
-          '<summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--primary);margin-bottom:8px">📄 View Full Original CV Text</summary>' +
-          '<pre class="raw-cv-pre" style="background:var(--wash);padding:14px;border-radius:8px;font-size:0.82rem;white-space:pre-wrap;max-height:300px;overflow-y:auto;border:1px solid var(--line);color:var(--ink-2);line-height:1.5">' + esc(cand.cv) + '</pre>' +
-        '</details>' : '') +
-    '</div>';
-
-    modal.hidden = false;
-  }
-
-  function closeRoadmapModal() {
-    var modal = $('roadmap-modal');
-    if (modal) modal.hidden = true;
-  }
-
-  if ($('btn-close-rm-dialog')) $('btn-close-rm-dialog').addEventListener('click', closeRoadmapModal);
-  if ($('btn-close-rm-dialog-2')) $('btn-close-rm-dialog-2').addEventListener('click', closeRoadmapModal);
-  if ($('roadmap-modal')) {
-    $('roadmap-modal').addEventListener('click', function (e) {
-      if (e.target === this) closeRoadmapModal();
-    });
-  }
-
-  // Recruiter Job Postings (Devpost style)
-  var recruiterJobs = [];
-
-  async function loadRecruiterJobs() {
-    try {
-      var resp = await fetch('/api/data?action=list_jobs');
-      var data = await resp.json();
-      recruiterJobs = data.jobs || [];
-      renderRecruiterJobs();
-    } catch (e) {
-      console.warn('Recruiter jobs load notice:', e);
-    }
-  }
-
-  function renderRecruiterJobs() {
-    var container = $('recruiter-jobs-list');
-    if (!container) return;
-
-    if (!recruiterJobs.length) {
-      container.innerHTML = '<p class="hint">No published jobs yet. Use the form to post an opening.</p>';
-      return;
-    }
-
-    container.innerHTML = recruiterJobs.map(function (j) {
-      return '<div class="card" style="padding:14px;border:1.5px solid var(--line);border-radius:10px;background:#fff">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
-          '<div>' +
-            '<strong style="font-size:0.95rem;color:var(--ink)">' + esc(j.title) + '</strong>' +
-            '<p style="font-size:0.82rem;color:var(--muted)">' + esc(j.company) + ' &bull; ' + esc(j.location) + '</p>' +
-          '</div>' +
-          '<button type="button" class="btn-quiet btn-screen-role" data-job-id="' + esc(j.id) + '" style="padding:4px 10px;font-size:0.8rem">' +
-            'Screen role &rarr;' +
-          '</button>' +
-        '</div>' +
-        '<div style="margin-top:8px;font-size:0.82rem;color:var(--ink-2)">' +
-          '<strong>Must-haves:</strong> ' + (j.mustHaves || []).join(', ') +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }
-
-  if ($('recruiter-jobs-list')) {
-    $('recruiter-jobs-list').addEventListener('click', function (e) {
-      var btn = e.target.closest('.btn-screen-role');
-      if (!btn) return;
-      var jid = btn.dataset.jobId;
-      var found = recruiterJobs.find(function (x) { return x.id === jid; });
-      if (!found) return;
-
-      $('rec-role').value = found.title;
-      $('jd').value = found.description + '\n\nRequirements:\n' + (found.mustHaves || []).map(function (m) { return '- ' + m; }).join('\n') +
-        '\n\nNice to have:\n' + (found.niceToHaves || []).map(function (n) { return '- ' + n; }).join('\n');
-
-      state.reqs = [
-        ...(found.mustHaves || []).map(function (m) { return { id: uid('r'), text: m, weight: 'must' }; }),
-        ...(found.niceToHaves || []).map(function (n) { return { id: uid('r'), text: n, weight: 'nice' }; })
-      ];
-
-      renderReqs();
-      switchTab('screen');
-      say('Role "' + found.title + '" loaded with ' + state.reqs.length + ' requirements. Add candidates and press Screen.');
-    });
-  }
-
-  if ($('post-job-form')) {
-    $('post-job-form').addEventListener('submit', async function (e) {
+  view.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.dataset && e.target.dataset.field === 'new-req') {
       e.preventDefault();
-      var title = $('new-job-title').value.trim();
-      var company = $('new-job-company').value.trim();
-      var location = $('new-job-location').value.trim();
-      var desc = $('new-job-desc').value.trim();
-      var must = $('new-job-must').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
-      var nice = $('new-job-nice').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+      addReq(e.target.dataset.list);
+    }
+  });
 
-      var status = $('post-job-status');
-      status.textContent = 'Publishing job ad…';
+  view.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target.dataset.form;
+    if (f === 'chat') sendChat();
+    else if (f === 'add-cv') addCv();
+  });
 
-      try {
-        var resp = await fetch('/api/data?action=post_job', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: title,
-            company: company,
-            location: location,
-            description: desc,
-            mustHaves: must,
-            niceToHaves: nice
-          })
-        });
-        var data = await resp.json();
-        if (data.ok) {
-          status.textContent = '✓ Job published live!';
-          $('post-job-form').reset();
-          loadRecruiterJobs();
-        } else {
-          status.textContent = '⚠ ' + (data.error || 'Failed to post');
-        }
-      } catch (err) {
-        status.textContent = '⚠ ' + err.message;
-      }
+  function refreshContactLinks() {
+    var r = parseHash();
+    var candId = r.parts[3];
+    var c = cache && cache.cands.filter(function (x) { return x.id === candId; })[0];
+    if (!c) return;
+    var u = contactUrls(c);
+    var map = { wa: u.wa, tel: u.tel, mail: u.mail };
+    Object.keys(map).forEach(function (k) {
+      var a = view.querySelector('.contact-btn.' + k);
+      if (a && map[k]) a.setAttribute('href', map[k]);
     });
   }
 
-  // Filter Pills Handler
-  var filterContainer = $('filter-pills');
-  if (filterContainer) {
-    filterContainer.addEventListener('click', function (e) {
-      var pill = e.target.closest('.filter-pill');
-      if (!pill) return;
-      var f = pill.dataset.filter;
-      state.activeFilter = f;
-      var allPills = filterContainer.querySelectorAll('.filter-pill');
-      Array.prototype.forEach.call(allPills, function (p) {
-        var active = p === pill;
-        p.classList.toggle('active', active);
-        p.setAttribute('aria-selected', String(active));
-      });
-      if (state.out) renderResults(true);
-    });
+  async function addCv() {
+    var name = $('add-name').value, cv = $('add-cv').value;
+    try {
+      var res = await call('candidateAdd', { jobId: cache.id, key: cache.key, name: name, cv: cv });
+      cache.cands.unshift(res.candidate);
+      ui.showAdd = false;
+      toast('Candidate added. Screen to rank them.');
+      location.hash = '#/job/' + cache.id + '/applicants/' + res.candidate.id;
+    } catch (err) { toast(err.message); }
   }
 
-  // Web Speech API Voice Dictation for Recruiter Role Intake
-  var recRecognition = null;
-  var isRecRecording = false;
-  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-  if ($('btn-rec-mic')) {
-    if (!SpeechRec) {
-      $('btn-rec-mic').title = 'Voice dictation is supported in Chrome, Edge, and Safari';
-    } else {
-      $('btn-rec-mic').addEventListener('click', function () {
-        if (isRecRecording) {
-          if (recRecognition) recRecognition.stop();
-          return;
-        }
-
-        try {
-          recRecognition = new SpeechRec();
-          recRecognition.continuous = false;
-          recRecognition.interimResults = false;
-          recRecognition.lang = 'en-US';
-
-          recRecognition.onstart = function () {
-            isRecRecording = true;
-            $('btn-rec-mic').classList.add('recording');
-            var micSpan = $('btn-rec-mic').querySelector('.mic-label');
-            if (micSpan) micSpan.textContent = 'Listening…';
-          };
-
-          recRecognition.onresult = function (event) {
-            var speechResult = event.results[0][0].transcript;
-            var input = $('rec-chat-input');
-            input.value = input.value ? (input.value.trim() + ' ' + speechResult) : speechResult;
-            input.focus();
-          };
-
-          recRecognition.onerror = function (event) {
-            console.warn('Speech recognition error:', event.error);
-          };
-
-          recRecognition.onend = function () {
-            isRecRecording = false;
-            $('btn-rec-mic').classList.remove('recording');
-            var micSpan = $('btn-rec-mic').querySelector('.mic-label');
-            if (micSpan) micSpan.textContent = 'Voice';
-          };
-
-          recRecognition.start();
-        } catch (err) {
-          console.warn('Could not start speech recognition:', err);
-        }
-      });
-    }
+  async function saveJob() {
+    var msg = $('edit-msg');
+    var reqs = edit.reqs.filter(function (r) { return r.text.trim(); });
+    if (!edit.title.trim()) { msg.textContent = 'The title cannot be empty.'; return; }
+    if (!reqs.length) { msg.textContent = 'Keep at least one requirement.'; return; }
+    try {
+      var res = await call('jobUpdate', { id: cache.id, key: cache.key, patch: { title: edit.title, company: edit.company, jd: edit.jd, status: edit.status, requirements: reqs } });
+      var before = reqSig(cache.job.requirements);
+      cache.job = res.job;
+      ScoutData.rememberJob(res.job, cache.key);
+      edit = null;
+      toast(before !== reqSig(res.job.requirements) && cache.cands.length ? 'Saved. Applicants need screening again.' : 'Saved');
+      location.hash = '#/job/' + cache.id + '/applicants';
+    } catch (err) { msg.textContent = err.message; }
   }
 
-  /* ---------- CSV Export ---------- */
-  $('export').addEventListener('click', function () {
-    var out = state.out;
-    if (!out) return;
-    var includeContacts = $('csv-contacts') && $('csv-contacts').checked;
-
-    var headers = ['Candidate', 'Match %', 'Up to % if verified', 'Suggestion', 'Your decision', 'Not stated', 'Contradicted'];
-    if (includeContacts) {
-      headers.push('Phone', 'Email', 'Consent');
-    }
-    var rows = [headers];
-
-    out.list.map(function (r) {
-      var sc = Engine.score(out.reqs, r.checks);
-      return { r: r, sc: sc };
-    }).sort(function (a, b) { return b.sc.now - a.sc.now; }).forEach(function (x) {
+  function exportCsv() {
+    var reqs = cache.job.requirements;
+    var rows = rowsFor();
+    var headers = ['Candidate', 'Stage', 'Match %', 'Up to % if verified', 'Suggestion', 'Stated', 'Not stated', 'Contradicted', 'Contacted'];
+    if (ui.csvContacts) headers.push('Phone', 'Email');
+    var out = [headers];
+    rows.forEach(function (r) {
       var names = function (status) {
-        return out.reqs.filter(function (q) {
-          var k = x.r.checks.filter(function (c) { return c.reqId === q.id; })[0];
+        if (!r.c.screen) return '';
+        return reqs.filter(function (q) {
+          var k = r.c.screen.checks.filter(function (x) { return x.reqId === q.id; })[0];
           return (k ? k.status : 'not_stated') === status;
         }).map(function (q) { return q.text; }).join('; ');
       };
-
-      var rowData = [
-        x.r.name,
-        x.sc.now,
-        x.sc.potential,
-        Engine.suggestion(x.sc).text,
-        state.decisions[x.r.id] ? DECISION_LABEL[state.decisions[x.r.id]] : '',
-        names('not_stated'),
-        names('not_met')
-      ];
-
-      if (includeContacts) {
-        rowData.push(
-          x.r.phone || '',
-          x.r.email || '',
-          x.r.consent ? 'Consented' : 'Withheld'
-        );
-      }
-
-      rows.push(rowData);
+      var line = [r.c.name, STAGE_LABEL[r.c.stage], r.sc ? r.sc.now : '', r.sc ? r.sc.potential : '', r.sug ? r.sug.text : 'Not screened',
+        names('met'), names('not_stated'), names('not_met'), r.c.contactedAt ? fmtDate(r.c.contactedAt) : ''];
+      if (ui.csvContacts) line.push(r.c.consent ? r.c.phone : '', r.c.consent ? r.c.email : '');
+      out.push(line);
     });
-
-    var blob = new Blob([Engine.toCsv(rows)], { type: 'text/csv;charset=utf-8' });
+    var blob = new Blob([Engine.toCsv(out)], { type: 'text/csv;charset=utf-8' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'screening-results.csv';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    a.download = cache.job.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '-applicants.csv';
+    document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  // Pick up new applicants when returning to the tab (shared storage only).
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden || !cache || cache.locked || app.mode !== 'remote' || ui.screening) return;
+    if (Date.now() - (cache.fetchedAt || 0) < 20000) return;
+    var r = parseHash();
+    if (r.parts[0] !== 'job' || (r.parts[2] && r.parts[2] !== 'applicants')) return;
+    loadJob(cache.id).then(function (d) { cache = d; rerender(); }).catch(function () { /* ignore */ });
   });
 
-  $('skip-to-screen').addEventListener('click', function () { switchTab('screen'); });
-
-  // Changing the outreach message or role title updates the links already shown.
-  ['rec-name', 'rec-company', 'rec-role', 'rec-template'].forEach(function (id) {
-    var el = $(id);
-    if (el) el.addEventListener('input', function () { if (state.out) renderResults(true); });
-  });
-
-  // Show whether the AI is really configured on the server.
-  fetch('/api/screen', { cache: 'no-store' })
-    .then(function (r) { return r.ok ? r.json() : { ai: false }; })
-    .then(function (d) {
-      var el = $('mode');
-      state.ai = Boolean(d && d.ai);
-      if (!el) return;
-      el.textContent = state.ai ? 'AI screening on' : 'Keyword mode';
-      el.className = 'mode' + (state.ai ? ' ai' : '');
-    })
-    .catch(function () {
-      var el = $('mode');
-      state.ai = false;
-      if (el) { el.textContent = 'Keyword mode'; el.className = 'mode'; }
-    });
-
-  loadRecruiterJobs();
-  initRecruiterChat();
-  renderReqs();
-  renderCands();
-  loadApplicantsAutomatically(true);
+  /* ---------------------------------------------------------------- start */
+  route();
 })();

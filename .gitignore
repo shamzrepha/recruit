@@ -1,6 +1,5 @@
 node_modules
-.vercel
 .env
-.env.local
-
+.env.*
 .vercel
+test/screenshots/debug.png

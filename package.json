@@ -4,9 +4,8 @@
   "private": true,
   "description": "Rank candidates against a role, with evidence from each CV. A human makes the decision.",
   "scripts": {
-    "test": "node test/engine.test.js && node test/contacts.test.js && node test/api.test.js && node test/roadmap.test.js",
+    "test": "node test/engine.test.js && node test/core.test.js && node test/contacts.test.js && node test/api.test.js",
     "test:browser": "node test/browser.test.js",
-    "pdf": "node scripts/generate-pdf.js",
     "dev": "npx vercel dev"
   },
   "engines": {

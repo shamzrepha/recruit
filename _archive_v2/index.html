@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scout Screener - AI-Powered Talent Sourcing for Early-Stage Startups</title>
+  <meta name="description" content="The AI suggests. A human decides. Evidence-based candidate screening for founders and recruiters, and a friendly way for candidates to apply.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%230f1f3d'/%3E%3Crect x='6' y='7' width='16' height='3.5' rx='1.5' fill='%231e9e4a'/%3E%3Crect x='6' y='12.25' width='16' height='3.5' rx='1.5' fill='%23f2b544'/%3E%3Crect x='6' y='17.5' width='10' height='3.5' rx='1.5' fill='%231f5bff'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="landing-body">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-quote" viewBox="0 0 24 24"><path d="M7 7h4v5a4 4 0 0 1-4 4M15 7h4v5a4 4 0 0 1-4 4"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/></symbol>
+</svg>
+<header class="appbar">
+  <div class="appbar-in">
+    <a class="brand" href="/" aria-label="Scout Screener home">
+      <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#0f1f3d"/><rect x="6" y="7" width="16" height="3.5" rx="1.5" fill="#1e9e4a"/><rect x="6" y="12.25" width="16" height="3.5" rx="1.5" fill="#f2b544"/><rect x="6" y="17.5" width="10" height="3.5" rx="1.5" fill="#1f5bff"/></svg>
+      <span>Scout Screener</span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="/" aria-current="page">Home</a>
+      <a href="/hire">For recruiters</a>
+      <a href="/apply">For candidates</a>
+    </nav>
+    <span id="mode" class="mode" role="status">Checking&hellip;</span>
+  </div>
+</header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero" aria-labelledby="hero-h">
+      <div>
+        <p class="eyebrow"><svg class="ic" aria-hidden="true"><use href="#i-sparkle"/></svg> Built for early-stage startup hiring</p>
+        <h1 class="hero-title" id="hero-h">The AI suggests.<br><em>A human decides.</em></h1>
+        <p class="hero-lede">
+          Rank candidates against a role and see the evidence from each CV. &ldquo;Not stated&rdquo; means <strong>verify</strong>, never <strong>reject</strong>.
+        </p>
+        <div class="hero-cta">
+          <a href="/hire" class="btn-main btn-lg">I am hiring <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></a>
+          <a href="/apply" class="btn-quiet btn-lg">I am looking for work</a>
+        </div>
+      </div>
+
+      <!-- Example of the product, so visitors see what they get -->
+      <div class="demo" role="group" aria-label="Example screening result">
+        <div class="demo-top"><strong>Founding Backend Engineer</strong><span>Example</span></div>
+
+        <div class="demo-row">
+          <span class="n">1</span><span class="nm">Adaeze Okafor</span><span class="pc">100%</span>
+          <div class="bar" role="img" aria-label="Adaeze Okafor: all 6 requirements stated">
+            <span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:1"></span><span class="seg s-met" style="flex:1"></span>
+          </div>
+        </div>
+        <div class="demo-row">
+          <span class="n">2</span><span class="nm">Ibrahim Sule</span><span class="pc">71%</span>
+          <div class="bar" role="img" aria-label="Ibrahim Sule: 4 of 6 requirements stated, 2 not stated">
+            <span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-not_stated" style="flex:3"></span><span class="seg s-not_stated" style="flex:1"></span><span class="seg s-met" style="flex:1"></span>
+          </div>
+          <span class="up">up to 100%<br>if verified</span>
+        </div>
+        <div class="demo-row">
+          <span class="n">3</span><span class="nm">Tunde Bakare</span><span class="pc">50%</span>
+          <div class="bar" role="img" aria-label="Tunde Bakare: 3 of 6 requirements stated, 3 not stated">
+            <span class="seg s-met" style="flex:3"></span><span class="seg s-met" style="flex:3"></span><span class="seg s-not_stated" style="flex:3"></span><span class="seg s-not_stated" style="flex:3"></span><span class="seg s-met" style="flex:1"></span><span class="seg s-not_stated" style="flex:1"></span>
+          </div>
+          <span class="up">up to 100%<br>if verified</span>
+        </div>
+        <div class="demo-foot">
+          <ul class="legend" aria-label="How to read a match bar">
+            <li><span class="seg s-met"></span> Stated in the CV</li>
+            <li><span class="seg s-not_stated"></span> Not stated, verify</li>
+            <li><span class="seg s-not_met"></span> CV says otherwise</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Two doors -->
+    <section class="section" aria-labelledby="doors-h">
+      <div class="section-head">
+        <h2 id="doors-h">Choose how you want to use it</h2>
+        <p>Same principle on both sides: every claim is checked against what the CV actually says.</p>
+      </div>
+      <div class="gateways">
+        <div class="gateway-card hire-card">
+          <div class="gateway-icon" aria-hidden="true"><svg class="ic"><use href="#i-briefcase"/></svg></div>
+          <span class="gateway-tag">For founders and recruiters</span>
+          <h3>I am looking to hire</h3>
+          <p>Describe your startup to the AI, get a clear list of requirements, then screen CVs against them and reach out in one tap.</p>
+          <ul class="gateway-features">
+            <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> AI brief turns a chat into must-haves and nice-to-haves</li>
+            <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Match bars show the evidence, with a quote for every claim</li>
+            <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> WhatsApp, call and email links for candidates who agreed</li>
+          </ul>
+          <a href="/hire" class="btn-main gateway-btn">Open recruiter workspace <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></a>
+        </div>
+
+        <div class="gateway-card apply-card">
+          <div class="gateway-icon" aria-hidden="true"><svg class="ic"><use href="#i-user"/></svg></div>
+          <span class="gateway-tag">For candidates</span>
+          <h3>I am looking to be employed</h3>
+          <p>Upload your CV as a photo, screenshot or PDF. Check the details, choose who can contact you, and take an optional 5-minute AI chat.</p>
+          <ul class="gateway-features">
+            <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Text is read on your own device, free</li>
+            <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> You confirm every detail before anything is sent</li>
+            <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Contact details stay private unless you tick the box</li>
+          </ul>
+          <a href="/apply" class="btn-main btn-green gateway-btn">Start my application <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="section" aria-labelledby="how-h">
+      <div class="section-head">
+        <h2 id="how-h">How a screen works</h2>
+      </div>
+      <ol class="steps4">
+        <li><h3>Brief the AI</h3><p>Chat about your startup and the role. You get a requirements list you can edit.</p></li>
+        <li><h3>Add candidates</h3><p>Paste CVs or load people who applied through the candidate page.</p></li>
+        <li><h3>Review the evidence</h3><p>Each requirement is Stated, Not stated or Contradicted, with the CV quote behind it.</p></li>
+        <li><h3>You decide</h3><p>Shortlist, ask first or pass. Then message the people you want to talk to.</p></li>
+      </ol>
+    </section>
+
+    <!-- Trust -->
+    <section class="section" aria-labelledby="trust-h">
+      <div class="section-head"><h2 id="trust-h">Built to be fair and checkable</h2></div>
+      <div class="trust">
+        <div>
+          <svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>
+          <div><h3>Consent first</h3><p>Candidate contact details are hidden unless the candidate agreed, and are left out of the CSV unless you switch them on.</p></div>
+        </div>
+        <div>
+          <svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg>
+          <div><h3>No automatic rejections</h3><p>The tool ranks and explains. A person makes every shortlist, hold and pass decision.</p></div>
+        </div>
+        <div>
+          <svg class="ic" aria-hidden="true"><use href="#i-quote"/></svg>
+          <div><h3>Evidence you can verify</h3><p>Any quote the AI shows is checked against the CV text. If it is not there, the claim is downgraded to &ldquo;not stated&rdquo;.</p></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>Built for a Talent Scout Intern application to Sourcing Sprints. Designed around the principles of the Nigeria Data Protection Act 2023: consent, a clear purpose, minimum data and deletion on request. Candidate records are set to expire after 30 days.</p>
+  </footer>
+
+  <script>
+    // Show whether the AI is configured on the server.
+    fetch('/api/screen', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : { ai: false }; })
+      .then(function (d) {
+        var el = document.getElementById('mode');
+        if (!el) return;
+        if (d && d.ai) { el.textContent = 'AI screening on'; el.className = 'mode ai'; }
+        else { el.textContent = 'Keyword mode'; el.className = 'mode'; }
+      })
+      .catch(function () {
+        var el = document.getElementById('mode');
+        if (el) { el.textContent = 'Keyword mode'; el.className = 'mode'; }
+      });
+  </script>
+</body>
+</html>

@@ -3,12 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Recruiter workspace - Scout Screener</title>
-  <meta name="description" content="Brief the AI on your role, screen candidate CVs against evidence, and reach out in one tap.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%230f1f3d'/%3E%3Crect x='6' y='7' width='16' height='3.5' rx='1.5' fill='%231e9e4a'/%3E%3Crect x='6' y='12.25' width='16' height='3.5' rx='1.5' fill='%23f2b544'/%3E%3Crect x='6' y='17.5' width='10' height='3.5' rx='1.5' fill='%231f5bff'/%3E%3C/svg%3E">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <title>Recruiting center - Scout Screener</title>
+  <meta name="description" content="Create jobs, share an apply link, and review ranked applicants with the evidence from each CV.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%2314213d'/%3E%3Crect x='6' y='7' width='16' height='3.5' rx='1.5' fill='%231f8f4e'/%3E%3Crect x='6' y='12.25' width='16' height='3.5' rx='1.5' fill='%23d99a1c'/%3E%3Crect x='6' y='17.5' width='10' height='3.5' rx='1.5' fill='%23f6f4ee'/%3E%3C/svg%3E">
+  <link rel="preload" href="/fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,309 +15,50 @@
   <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
   <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
-  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/></symbol>
   <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></symbol>
   <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
-  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></symbol>
-  <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></symbol>
-  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
-  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></symbol>
-  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5"/></symbol>
-  <symbol id="i-quote" viewBox="0 0 24 24"><path d="M7 7h4v5a4 4 0 0 1-4 4M15 7h4v5a4 4 0 0 1-4 4"/></symbol>
-  <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol>
-  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/></symbol>
-  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></symbol>
 </svg>
-<header class="appbar">
-  <div class="appbar-in">
+
+<div class="shell">
+  <aside class="sidebar">
     <a class="brand" href="/" aria-label="Scout Screener home">
-      <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#0f1f3d"/><rect x="6" y="7" width="16" height="3.5" rx="1.5" fill="#1e9e4a"/><rect x="6" y="12.25" width="16" height="3.5" rx="1.5" fill="#f2b544"/><rect x="6" y="17.5" width="10" height="3.5" rx="1.5" fill="#1f5bff"/></svg>
-      <span>Scout Screener</span>
+      <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#14213d"/><rect x="6" y="7" width="16" height="3.5" rx="1.5" fill="#1f8f4e"/><rect x="6" y="12.25" width="16" height="3.5" rx="1.5" fill="#d99a1c"/><rect x="6" y="17.5" width="10" height="3.5" rx="1.5" fill="#f6f4ee"/></svg>
+      <span class="brand-word">Scout Screener</span>
     </a>
-    <nav class="nav" aria-label="Main">
-      <a href="/">Home</a>
-      <a href="/hire" aria-current="page">For recruiters</a>
-      <a href="/apply">For candidates</a>
+
+    <nav class="side-nav" aria-label="Recruiting center">
+      <a href="#/" id="nav-jobs"><svg class="ic" aria-hidden="true"><use href="#i-briefcase"/></svg> Jobs <span class="count" id="nav-jobs-count"></span></a>
+      <a href="#/new" id="nav-new"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg> New job</a>
     </nav>
-    <span id="mode" class="mode" role="status">Checking&hellip;</span>
-  </div>
-</header>
 
-  <div class="page">
-    <div class="page-head">
-      <h1>Recruiter workspace</h1>
-      <p class="sub">Brief the AI on the role, screen CVs against the requirements, then review the evidence and reach out.</p>
+    <div class="side-foot">
+      <div class="status-line"><span class="dot" id="store-dot"></span><span id="store-label">Checking storage&hellip;</span></div>
+      <div class="status-line"><span class="dot" id="ai-dot"></span><span id="ai-label">Checking AI&hellip;</span></div>
+      <a href="/" class="small">Back to site</a>
     </div>
+  </aside>
 
-    <div class="tabs" role="tablist" aria-label="Recruiter workspace steps">
-      <button type="button" class="tab-btn active" id="tab-intake-btn" role="tab" aria-selected="true" aria-controls="section-intake" data-tab="intake">
-        <span class="num" aria-hidden="true">1</span> Brief the AI
-      </button>
-      <button type="button" class="tab-btn" id="tab-screen-btn" role="tab" aria-selected="false" aria-controls="section-screen" data-tab="screen">
-        <span class="num" aria-hidden="true">2</span> Screen candidates
-      </button>
-      <button type="button" class="tab-btn" id="tab-jobs-btn" role="tab" aria-selected="false" aria-controls="section-jobs" data-tab="jobs">
-        <span class="num" aria-hidden="true">3</span> Post an ad / Job board
-      </button>
-    </div>
+  <main class="main" id="main" tabindex="-1">
+    <div id="view" aria-live="polite"></div>
+  </main>
+</div>
 
-    <main>
-      <!-- ============ STEP 1: AI role intake ============ -->
-      <section id="section-intake" class="tab-panel active" role="tabpanel" aria-labelledby="tab-intake-btn">
-        <div class="intake-grid">
-          <div class="card chat-card">
-            <div class="chat-header">
-              <div class="who-ai">
-                <span class="avatar" aria-hidden="true"><svg class="ic"><use href="#i-bot"/></svg></span>
-                <div>
-                  <h2 id="intake-heading" class="chat-title">AI Sourcing Partner</h2>
-                  <p class="hint">Tell it about your startup and who you need to hire.</p>
-                </div>
-              </div>
-            </div>
+<div class="toast-host" id="toast-host" aria-live="polite"></div>
 
-            <div id="recruiter-chat-messages" class="chat-messages" role="log" aria-live="polite" aria-label="Conversation with the AI Sourcing Partner"></div>
-
-            <div id="recruiter-typing" class="typing-indicator" hidden>
-              <span></span><span></span><span></span> AI is writing a reply&hellip;
-            </div>
-
-            <form id="recruiter-chat-form" class="chat-input-area">
-              <label for="rec-chat-input" class="visually-hidden">Tell the AI about your startup and hiring needs</label>
-              <textarea id="rec-chat-input" rows="3" maxlength="1500" placeholder="e.g. We are a seed-stage fintech in Lagos building payment APIs. We need a founding backend engineer with 3+ years in Python or Go." required></textarea>
-              <div class="chat-actions">
-                <button type="button" id="btn-quick-sample-chat" class="btn-quiet">Use an example brief</button>
-                <div class="chat-btns-right">
-                  <button type="button" id="btn-rec-mic" class="btn-quiet btn-mic" title="Dictate with voice" aria-label="Dictate with voice">
-                    <svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg> <span class="mic-label">Voice</span>
-                  </button>
-                  <button type="submit" id="rec-send-btn" class="btn-main">Send</button>
-                </div>
-              </div>
-            </form>
-          </div>
-
-          <aside class="card side-card" aria-labelledby="next-h">
-            <h3 id="next-h">How this works</h3>
-            <ol class="side-steps">
-              <li><div><strong>Describe the role</strong>Answer the AI&rsquo;s questions in your own words.</div></li>
-              <li><div><strong>Get requirements</strong>The chat becomes a list of must-haves and nice-to-haves you can edit.</div></li>
-              <li><div><strong>Screen candidates</strong>Paste CVs or load applicants and see ranked evidence.</div></li>
-            </ol>
-            <div class="generate-cta-box">
-              <p class="cta-text"><strong>Ready to screen?</strong>Turn this conversation into a role and requirements list.</p>
-              <button type="button" id="btn-generate-role" class="btn-main btn-green">Generate role and requirements <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
-            </div>
-            <p class="subtext" style="margin-top:12px">Already have a job description? Skip ahead to <button type="button" class="btn-quiet" style="padding:3px 10px" id="skip-to-screen">Screen candidates</button></p>
-          </aside>
-        </div>
-      </section>
-
-      <!-- ============ STEP 2: Screen and reach out ============ -->
-      <section id="section-screen" class="tab-panel" role="tabpanel" aria-labelledby="tab-screen-btn" hidden>
-        <div class="screen-grid">
-          <section class="card" aria-labelledby="role-h">
-            <div class="card-head">
-              <div>
-                <h2 id="role-h"><span class="step-badge" aria-hidden="true">A</span>The role</h2>
-              </div>
-            </div>
-
-            <label for="rec-role" class="field-label">Role title</label>
-            <input type="text" id="rec-role" value="Founding Backend Engineer" placeholder="e.g. Founding Backend Engineer">
-
-            <label for="jd" class="field-label" style="margin-top:16px">Job description</label>
-            <textarea id="jd" rows="7" placeholder="Paste the job description. Bullet points work best for requirements."></textarea>
-            <div class="row">
-              <button type="button" class="btn-quiet" id="extract">Pull out requirements</button>
-              <button type="button" class="btn-quiet" id="sample">Load a sample role and candidates</button>
-            </div>
-
-            <h3 class="group-title">Requirements <span class="count-pill" id="req-count">0</span></h3>
-            <p class="hint" style="margin-bottom:10px">Click a label to switch between Must have and Nice to have. Must-haves count three times as much.</p>
-            <ul id="reqs" class="reqs"></ul>
-            <div class="add-req">
-              <label for="newreq" class="visually-hidden">Add a requirement</label>
-              <input id="newreq" type="text" maxlength="140" placeholder="Add a requirement, then press Enter">
-              <button type="button" class="btn-quiet" id="addreq">Add</button>
-            </div>
-          </section>
-
-          <section class="card" aria-labelledby="people-h">
-            <div class="card-head">
-              <div>
-                <h2 id="people-h"><span class="step-badge" aria-hidden="true">B</span>Candidates <span class="count-pill" id="cand-count">0</span></h2>
-                <p class="hint">Paste each CV as plain text, or load people who applied. Ranking uses the requirements, not names or personal details.</p>
-              </div>
-            </div>
-            <div id="cands"></div>
-            <div class="row">
-              <button type="button" class="btn-quiet" id="addcand">+ Add a candidate</button>
-              <button type="button" class="btn-quiet" id="load-applicants">Load applicants from the candidate page</button>
-            </div>
-          </section>
-        </div>
-
-        <div class="run">
-          <p id="status" class="status" role="status">Add requirements and at least one CV, then screen.</p>
-          <button type="button" class="btn-main btn-lg" id="run">Screen candidates</button>
-        </div>
-
-        <!-- Results -->
-        <section id="results" class="results" hidden aria-labelledby="results-h">
-          <div class="results-head">
-            <h2 id="results-h">Results</h2>
-            <p id="tally" class="tally"></p>
-          </div>
-
-          <div class="filter-pills" id="filter-pills" role="tablist" aria-label="Filter candidates by screening decision">
-            <button type="button" class="filter-pill active" data-filter="all" role="tab" aria-selected="true">All candidates <span class="count" id="count-all">0</span></button>
-            <button type="button" class="filter-pill" data-filter="strong" role="tab" aria-selected="false">Shortlist <span class="count" id="count-strong">0</span></button>
-            <button type="button" class="filter-pill" data-filter="look" role="tab" aria-selected="false">Ask first <span class="count" id="count-look">0</span></button>
-            <button type="button" class="filter-pill" data-filter="skip" role="tab" aria-selected="false">Passed <span class="count" id="count-skip">0</span></button>
-          </div>
-
-          <p id="fallback" class="notice" hidden></p>
-
-          <div class="results-tools">
-            <ul class="legend" aria-label="How to read a match bar">
-              <li><span class="seg s-met"></span> Stated in the CV</li>
-              <li><span class="seg s-not_stated"></span> Not stated, verify</li>
-              <li><span class="seg s-not_met"></span> CV says otherwise</li>
-            </ul>
-            <div class="export-group">
-              <label class="csv-toggle-label">
-                <input type="checkbox" id="csv-contacts"> Include contact details in CSV
-              </label>
-              <button type="button" class="btn-quiet" id="export">Download CSV</button>
-            </div>
-          </div>
-
-          <details class="recruiter-settings" id="recruiter-box">
-            <summary>
-              <strong>Outreach message</strong>
-              <span>Sets the WhatsApp and email text. Click to edit.</span>
-            </summary>
-            <div class="settings-grid">
-              <div>
-                <label for="rec-name" class="field-label">Your name</label>
-                <input type="text" id="rec-name" value="Tolu Adebayo" placeholder="Your name">
-              </div>
-              <div>
-                <label for="rec-company" class="field-label">Company</label>
-                <input type="text" id="rec-company" value="Sourcing Sprints" placeholder="Company name">
-              </div>
-              <div class="full-col">
-                <label for="rec-template" class="field-label">Message (you can use {first name}, {recruiter name}, {company}, {role})</label>
-                <input type="text" id="rec-template" value="Hi {first name}, I'm {recruiter name} from {company}. I saw your CV for the {role} role and would like a quick chat. Are you free this week?">
-              </div>
-            </div>
-          </details>
-
-          <div class="card rank-card">
-            <div class="rank-cols" aria-hidden="true">
-              <span>#</span><span>Candidate</span><span>Match by requirement</span><span>Match</span><span></span>
-            </div>
-            <ol id="ranking" class="ranking"></ol>
-          </div>
-
-          <div class="card coverage">
-            <div class="card-head">
-              <div>
-                <h2>Where the pool is thin</h2>
-                <p class="hint">How many candidates state each requirement, hardest to find first. Search harder for the top rows.</p>
-              </div>
-            </div>
-            <ul id="coverage" class="cov-list"></ul>
-          </div>
-        </section>
-      </section>
-
-      <!-- ============ STEP 3: Post an ad & Job Board ============ -->
-      <section id="section-jobs" class="tab-panel" role="tabpanel" aria-labelledby="tab-jobs-btn" hidden>
-        <div class="intake-grid">
-          <section class="card" aria-labelledby="post-job-h">
-            <h2 id="post-job-h"><svg class="ic" aria-hidden="true"><use href="#i-briefcase"/></svg> Post a new startup role</h2>
-            <p class="hint">Publish an open role to candidates. Candidates can view your ad, scan their CV, and see their live match ranking.</p>
-
-            <form id="post-job-form" style="margin-top:16px">
-              <label for="new-job-title" class="field-label">Role title</label>
-              <input type="text" id="new-job-title" placeholder="e.g. Founding Backend Engineer (Python / Go)" required>
-
-              <div class="form-grid" style="margin-top:12px">
-                <div>
-                  <label for="new-job-company" class="field-label">Company / Startup</label>
-                  <input type="text" id="new-job-company" placeholder="e.g. PayFast Lagos" required>
-                </div>
-                <div>
-                  <label for="new-job-location" class="field-label">Location / Work mode</label>
-                  <input type="text" id="new-job-location" placeholder="e.g. Lagos (Hybrid) or Remote" required>
-                </div>
-              </div>
-
-              <label for="new-job-desc" class="field-label" style="margin-top:12px">Role description &amp; mission</label>
-              <textarea id="new-job-desc" rows="3" placeholder="Briefly explain what the startup builds and what this engineer will own."></textarea>
-
-              <label for="new-job-must" class="field-label" style="margin-top:12px">Must-have requirements (one per line)</label>
-              <textarea id="new-job-must" rows="3" placeholder="3+ years in backend development&#10;Python or Go in production&#10;PostgreSQL database experience"></textarea>
-
-              <label for="new-job-nice" class="field-label" style="margin-top:12px">Nice-to-have requirements (one per line)</label>
-              <textarea id="new-job-nice" rows="2" placeholder="Early-stage startup experience&#10;AWS or GCP infrastructure"></textarea>
-
-              <div class="row" style="margin-top:16px">
-                <button type="submit" id="btn-submit-job" class="btn-main">Publish job ad <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
-                <p id="post-job-status" class="status" role="status"></p>
-              </div>
-            </form>
-          </section>
-
-          <aside class="card side-card" aria-labelledby="live-jobs-h">
-            <h2 id="live-jobs-h" style="font-size:1.15rem">Live published roles</h2>
-            <p class="hint">Active roles currently displayed to candidates on the application portal.</p>
-            <div id="recruiter-jobs-list" style="display:flex;flex-direction:column;gap:12px;margin-top:14px"></div>
-          </aside>
-        </div>
-      </section>
-    </main>
-  </div>
-
-  <footer class="foot">
-    <p>Contact details are shown only when the candidate agreed. Candidate records expire after 30 days or sooner if the candidate asks. Designed around the principles of the Nigeria Data Protection Act 2023.</p>
-  </footer>
-
-  <!-- Interview Transcript Dialog -->
-  <div id="transcript-modal" class="dialog-backdrop" hidden>
-    <div class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
-      <div class="dialog-header">
-        <h3 id="dialog-title">Candidate Interview Transcript</h3>
-        <button type="button" id="btn-close-dialog" class="icon-btn" aria-label="Close dialog">&times;</button>
-      </div>
-      <div id="dialog-content" class="dialog-body"></div>
-      <div class="dialog-footer">
-        <button type="button" id="btn-close-dialog-2" class="btn-quiet">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Candidate Career Roadmap Modal -->
-  <div id="roadmap-modal" class="dialog-backdrop" hidden>
-    <div class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="rm-dialog-title" style="max-width:760px">
-      <div class="dialog-header">
-        <h3 id="rm-dialog-title">Candidate Career Roadmap</h3>
-        <button type="button" id="btn-close-rm-dialog" class="icon-btn" aria-label="Close dialog">&times;</button>
-      </div>
-      <div id="rm-dialog-content" class="dialog-body"></div>
-      <div class="dialog-footer">
-        <button type="button" id="btn-close-rm-dialog-2" class="btn-quiet">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="engine.js"></script>
-  <script src="samples.js"></script>
-  <script src="hire.js"></script>
+<script src="engine.js"></script>
+<script src="samples.js"></script>
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="hire.js"></script>
 </body>
 </html>

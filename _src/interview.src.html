@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI chat - Scout Screener</title>
+  <meta name="description" content="A short chat about your experience.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='7' fill='%2314213d'/%3E%3Crect x='6' y='7' width='16' height='3.5' rx='1.5' fill='%231f8f4e'/%3E%3Crect x='6' y='12.25' width='16' height='3.5' rx='1.5' fill='%23d99a1c'/%3E%3Crect x='6' y='17.5' width='10' height='3.5' rx='1.5' fill='%23f6f4ee'/%3E%3C/svg%3E">
+  <link rel="preload" href="/fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!--SPRITE-->
+<!--TOPBAR-->
+
+<main class="page narrow">
+  <div id="state"></div>
+  <div id="flow" hidden>
+    <div class="page-head">
+      <p class="eyebrow" id="i-company"></p>
+      <h1 id="i-title" style="margin-top:8px">A few questions</h1>
+      <p class="lede" id="i-sub"></p>
+    </div>
+
+    <div id="notice" class="transparency">
+      <h2>Before you start</h2>
+      <ul>
+        <li>You are talking to an AI. It asks five questions about your CV and the role.</li>
+        <li>You can skip any question or stop at any time.</li>
+        <li>It never asks about age, health, family, religion or similar. If it does, skip it.</li>
+        <li>The recruiter sees a short summary, not your full answers. A person makes every decision.</li>
+      </ul>
+    </div>
+
+    <section id="chat-card" hidden aria-label="Interview">
+      <div class="row between" style="margin-bottom:12px"><strong id="progress">Question 1 of 5</strong><button type="button" class="btn ghost sm" id="btn-stop">Stop and finish</button></div>
+      <div class="chat">
+        <div id="chat-log" class="chat-log" role="log" aria-live="polite"></div>
+        <div id="typing" class="typing" hidden><i></i><i></i><i></i><span style="margin-left:6px">Writing a question</span></div>
+        <form id="chat-form" class="composer">
+          <label class="visually-hidden" for="answer">Your answer</label>
+          <textarea id="answer" rows="3" maxlength="1200" placeholder="Type your answer" required></textarea>
+          <div class="row between"><button type="button" class="btn secondary sm" id="btn-skip">Skip this question</button><button type="submit" class="btn" id="btn-send">Send</button></div>
+        </form>
+      </div>
+    </section>
+    <div id="begin-row" class="row"><button type="button" class="btn lg" id="btn-begin">Start the chat</button></div>
+
+    <section id="summary-section" hidden aria-live="polite">
+      <div class="block-head"><h2>Thank you.</h2><p id="sum-status">Writing the summary for the recruiter&hellip;</p></div>
+      <div class="summary-box" id="summary-box" hidden>
+        <div><span class="chip" id="conf-chip"></span></div>
+        <p id="summary-body"></p>
+        <div class="summary-two"><div><h3>Confirmed</h3><ul id="confirmed"></ul></div><div><h3>Still open</h3><ul id="open"></ul></div></div>
+        <div><h3>Questions the recruiter may ask you</h3><ol id="followups"></ol></div>
+        <p class="hint">Written by AI from your own answers. The recruiter checks it and decides.</p>
+      </div>
+      <div class="row" style="margin-top:24px"><button type="button" class="btn danger sm" id="btn-delete-interview">Delete my application and chat</button></div>
+    </section>
+  </div>
+</main>
+<footer class="footer"><p>The AI suggests and a person decides. Your chat answers stay with you; the recruiter only gets the summary.</p></footer>
+
+<script src="engine.js"></script>
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="interview.js"></script>
+</body>
+</html>

@@ -231,62 +231,75 @@ function fakeRes() {
      4. DATA & STORAGE API TESTS (NDPA Compliance)
      ========================================================================= */
 
-  // 4.1 Candidate application creation
-  res = fakeRes();
-  await dataHandler({
-    method: 'POST',
-    query: { action: 'apply' },
-    body: {
-      name: 'Amara Kalu',
-      cv: 'Python and Go software engineer with 4 years experience.',
-      phone: '+2348039876543',
-      email: 'amara@example.com',
-      consent: false // Contact withheld!
-    }
-  }, res);
+  const post = async (action, body) => {
+    const r = fakeRes();
+    await dataHandler({ method: 'POST', query: { action }, body }, r);
+    return r;
+  };
 
+  // 4.1 Without durable storage the server says so, so pages keep data in the browser
+  delete process.env.UPSTASH_REDIS_REST_URL; delete process.env.UPSTASH_REDIS_REST_TOKEN;
+  delete process.env.KV_REST_API_URL; delete process.env.KV_REST_API_TOKEN;
+  delete process.env.SCOUT_STORE;
+  res = fakeRes();
+  await dataHandler({ method: 'GET', query: { action: 'status' } }, res);
+  assert.deepStrictEqual(res.body, { persistent: false, store: 'memory' });
+
+  // 4.2 With Redis configured it reports durable storage
+  process.env.UPSTASH_REDIS_REST_URL = 'https://example.upstash.io';
+  process.env.UPSTASH_REDIS_REST_TOKEN = 'tok';
+  res = fakeRes();
+  await dataHandler({ method: 'GET', query: { action: 'status' } }, res);
+  assert.deepStrictEqual(res.body, { persistent: true, store: 'redis' });
+  delete process.env.UPSTASH_REDIS_REST_URL; delete process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  // 4.3 Full flow on the in-memory store used for tests
+  process.env.SCOUT_STORE = 'memory-persistent';
+  res = await post('jobCreate', {
+    title: 'Backend Engineer',
+    requirements: [{ text: 'Python or Go in production', weight: 'must' }]
+  });
   assert.strictEqual(res.code, 200);
-  assert.ok(res.body.id.startsWith('c_'), 'Token starts with unguessable prefix c_');
-  assert.ok(res.body.id.length >= 24, 'Unguessable token must be at least 24 characters');
-  const candidateToken = res.body.id;
+  const jobId = res.body.job.id, jobKey = res.body.key;
 
-  // 4.2 Candidate can retrieve their own application
-  res = fakeRes();
-  await dataHandler({
-    method: 'GET',
-    query: { action: 'get_candidate', token: candidateToken }
-  }, res);
+  res = await post('apply', {
+    jobId, name: 'Amara Kalu', cv: 'Python and Go software engineer with 4 years experience.',
+    phone: '+2348039876543', email: 'amara@example.com', consent: false
+  });
+  assert.strictEqual(res.code, 200);
+  assert.ok(res.body.token.startsWith('c_') && res.body.token.length >= 24, 'unguessable token');
+  const candidateToken = res.body.token;
+
+  res = await post('candidateGet', { token: candidateToken });
   assert.strictEqual(res.code, 200);
   assert.strictEqual(res.body.candidate.name, 'Amara Kalu');
+  assert.strictEqual(res.body.job.title, 'Backend Engineer');
 
-  // 4.3 Recruiter lists candidates -> Privacy Rule: contact withheld when consent=false
-  res = fakeRes();
-  await dataHandler({
-    method: 'GET',
-    query: { action: 'list_candidates' }
-  }, res);
+  // Privacy: wrong key is refused, right key hides contact when consent is false
+  res = await post('candidates', { jobId, key: 'wrong' });
+  assert.strictEqual(res.code, 403);
+  res = await post('candidates', { jobId, key: jobKey });
   assert.strictEqual(res.code, 200);
   const found = res.body.candidates.find(c => c.id === candidateToken);
-  assert.ok(found, 'Candidate is listed for recruiter');
-  assert.strictEqual(found.phone, '', 'Phone is stripped when consent is false');
-  assert.strictEqual(found.email, '', 'Email is stripped when consent is false');
+  assert.ok(found, 'candidate is listed for the recruiter');
+  assert.strictEqual(found.phone, '', 'phone is stripped when consent is false');
+  assert.strictEqual(found.email, '', 'email is stripped when consent is false');
 
-  // 4.4 Right to Erasure / Immediate Delete
+  // Bad input and bad methods
+  res = await post('nonsense', {});
+  assert.strictEqual(res.code, 400);
   res = fakeRes();
-  await dataHandler({
-    method: 'POST',
-    query: { action: 'delete', id: candidateToken }
-  }, res);
-  assert.strictEqual(res.code, 200);
+  await dataHandler({ method: 'GET', query: { action: 'candidates' } }, res);
+  assert.strictEqual(res.code, 405, 'reads of candidate data are POST only');
+  res = await post('apply', { jobId: 'j_missing', name: 'A', cv: 'x'.repeat(40) });
+  assert.strictEqual(res.code, 404);
+
+  // Right to erasure
+  res = await post('candidateDelete', { token: candidateToken });
   assert.strictEqual(res.body.deleted, true);
-
-  // Check it is deleted
-  res = fakeRes();
-  await dataHandler({
-    method: 'GET',
-    query: { action: 'get_candidate', token: candidateToken }
-  }, res);
-  assert.strictEqual(res.code, 404, 'Deleted candidate is no longer accessible');
+  res = await post('candidateGet', { token: candidateToken });
+  assert.strictEqual(res.code, 404, 'deleted candidate is no longer accessible');
+  delete process.env.SCOUT_STORE;
 
 
   /* =========================================================================
