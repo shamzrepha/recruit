@@ -543,7 +543,7 @@ details > summary { cursor: pointer; }
   .main { padding: 24px 24px 96px; }
 }
 @media (max-width: 920px) {
-  .shell { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: minmax(0, 1fr); }
   .sidebar { position: static; height: auto; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 12px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
   .side-nav { display: flex; gap: 2px; overflow-x: auto; }
   .side-nav a { white-space: nowrap; }
@@ -592,3 +592,16 @@ details > summary { cursor: pointer; }
 }
 #profile-form .form-grid { grid-template-columns: 1fr; }
 .num-list li > span { min-width: 0; }
+
+.main, .kv, .card, .card.pad, .job-head, .jh-main, .tabs-line, .toolbar { min-width: 0; max-width: 100%; }
+.link-box { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.link-box code { white-space: normal; word-break: break-all; }
+.banner { min-width: 0; }
+.banner span, .hint, p { overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .jh-actions { margin-left: 0; width: 100%; }
+  .row > .btn, .jh-actions .btn { flex: 1 1 auto; white-space: normal; }
+  .page-title .row { width: 100%; }
+  .table-scroll { max-width: 100%; }
+  .main { padding-left: 14px; padding-right: 14px; }
+}
