@@ -245,7 +245,7 @@
     view.innerHTML = head + '<p class="muted">Loading&hellip;</p>';
     var rows = await loadPortfolio();
     if (my !== navId) return;
-    view.innerHTML = head + '<div class="card table-card"><div class="table-scroll"><table class="table"><thead><tr><th>Job</th><th>Status</th><th class="r">Applicants</th><th class="r">To review</th><th>Posted</th><th></th></tr></thead><tbody>' +
+    view.innerHTML = head + '<div class="card table-card"><div class="table-scroll"><table class="table"><thead><tr><th>Job</th><th>Status</th><th class="r">Applicants</th><th class="r">To review</th><th>Posted</th><th class="r">Actions</th></tr></thead><tbody>' +
       rows.map(function (r) {
         if (r.error) {
           return '<tr><td><strong>' + esc(r.m.title) + '</strong><div class="muted small">Not available. It may have expired.</div></td><td></td><td></td><td></td><td></td><td class="r"><button class="btn ghost sm" data-act="forget" data-id="' + esc(r.m.id) + '">Remove</button></td></tr>';
@@ -253,7 +253,7 @@
         var fresh = r.cands.filter(function (c) { return c.stage === 'new'; }).length;
         return '<tr class="click" data-href="#/job/' + esc(r.job.id) + '"><td><a class="t-main" href="#/job/' + esc(r.job.id) + '"><strong>' + esc(r.job.title) + '</strong></a><div class="muted small">' + jobMeta(r.job) + '</div></td>' +
           '<td><span class="chip ' + (r.job.status === 'open' ? 'ok' : '') + '"><span class="dot"></span>' + (r.job.status === 'open' ? 'Open' : 'Closed') + '</span></td>' +
-          '<td class="r">' + r.cands.length + '</td><td class="r">' + (fresh ? '<span class="chip info">' + fresh + '</span>' : '0') + '</td><td>' + esc(fmtDate(r.job.createdAt)) + '</td><td class="r">' + icon('arrow-right') + '</td></tr>';
+          '<td class="r">' + r.cands.length + '</td><td class="r">' + (fresh ? '<span class="chip info">' + fresh + '</span>' : '0') + '</td><td>' + esc(fmtDate(r.job.createdAt)) + '</td><td class="r" style="white-space:nowrap"><button type="button" class="btn ghost sm" style="color:var(--red,#dc2626)" data-act="delete-job" data-id="' + esc(r.job.id) + '" data-title="' + esc(r.job.title) + '" title="Delete this job">' + icon('trash') + ' Delete</button></td></tr>';
       }).join('') + '</tbody></table></div></div>';
   }
 
@@ -1260,7 +1260,10 @@
       '<section class="card pad"><h2 class="card-h">Requirements</h2><p class="hint" style="margin:4px 0 12px">Applicants are ranked against these. If you change them, applicants are marked as needing a fresh screen.</p>' + reqEditor('edit', e.reqs) + '</section>' +
       '<section class="card pad"><div class="field" style="max-width:16rem"><label class="label" for="e-status">Applications</label><select id="e-status" data-field="edit.status"><option value="open"' + (e.status === 'open' ? ' selected' : '') + '>Open</option><option value="closed"' + (e.status === 'closed' ? ' selected' : '') + '>Closed</option></select></div></section>' +
       '<p id="edit-msg" class="field-msg error" role="alert"></p>' +
-      '<div class="row"><button class="btn lg" data-act="save-job">Save changes</button><a class="btn ghost" href="#/job/' + esc(j.id) + '/applicants">Cancel</a></div></div>';
+      '<div class="row"><button class="btn lg" data-act="save-job">Save changes</button><a class="btn ghost" href="#/job/' + esc(j.id) + '/applicants">Cancel</a></div>' +
+      '<section class="card pad" style="margin-top:24px;border:1px solid var(--red,#dc2626)"><h2 class="card-h" style="color:var(--red,#dc2626)">Delete Job</h2>' +
+      '<p class="hint">Permanently delete this job and remove it from your dashboard and pipelines. Candidates will no longer be able to apply.</p>' +
+      '<div class="row" style="margin-top:12px"><button type="button" class="btn danger" data-act="delete-job" data-id="' + esc(j.id) + '" data-title="' + esc(j.title) + '" data-then="jobs">' + icon('trash') + ' Delete this job</button></div></section></div>';
   }
 
   function shareTab() {
@@ -1279,9 +1282,10 @@
       (app.mode === 'remote'
         ? '<p class="hint">Shared storage is on. Candidates can apply from any device and the applications reach you here.</p>'
         : '<div class="banner info" style="margin-top:8px"><span><strong>This browser only.</strong> This site has no shared storage set up, so applications are saved in this browser. Candidates must apply in the same browser, which is fine for a demo. To receive applications from other devices, add a free Upstash Redis database (see the README) and redeploy.</span></div>') + '</section>' +
-      '<section class="card pad"><h2 class="card-h">Job status</h2><p class="hint">Closing stops new applications. Existing applicants stay.</p><div class="row" style="margin-top:12px">' +
+      '<section class="card pad"><h2 class="card-h">Job actions &amp; status</h2><p class="hint">Closing stops new applications. Deleting permanently closes and removes this job.</p><div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">' +
       '<button class="btn secondary" data-act="toggle-status">' + (j.status === 'open' ? 'Close applications' : 'Reopen applications') + '</button>' +
-      '<button class="btn danger" data-act="forget" data-id="' + esc(j.id) + '" data-then="home">Remove from this browser</button></div></section></div>';
+      '<button class="btn danger" data-act="delete-job" data-id="' + esc(j.id) + '" data-title="' + esc(j.title) + '" data-then="jobs">' + icon('trash') + ' Delete job permanently</button>' +
+      '<button class="btn ghost sm" data-act="forget" data-id="' + esc(j.id) + '" data-then="home">Remove from this device only</button></div></section></div>';
   }
 
   /* ================================================================ EVENTS */
@@ -1291,6 +1295,35 @@
   var searchT = null;
   var acts = {
     sample: function (t) { makeSample(t).catch(function (e) { toast(e.message); t.disabled = false; }); },
+    'delete-job': async function (t) {
+      var id = t.dataset.id;
+      var title = t.dataset.title || 'this job';
+      if (!confirm('Are you sure you want to delete "' + title + '"? This will close the job and remove it from your pipeline.')) return;
+      t.disabled = true;
+      try {
+        var myJobs = ScoutData.myJobs();
+        var entry = myJobs.filter(function (x) { return x.id === id; })[0];
+        var key = entry ? entry.key : (cache && cache.id === id ? cache.key : '');
+        if (key) {
+          try {
+            await call('jobUpdate', { id: id, key: key, patch: { status: 'closed', listed: false } });
+          } catch (e) {
+            console.warn('Remote jobUpdate failed on delete:', e);
+          }
+        }
+        ScoutData.forgetJob(id);
+        if (cache && cache.id === id) cache = null;
+        toast('Job "' + title + '" deleted.');
+        if (t.dataset.then === 'jobs' || location.hash.indexOf('#/job/' + id) === 0) {
+          location.hash = '#/jobs';
+        } else {
+          route();
+        }
+      } catch (err) {
+        toast('Could not delete job: ' + err.message);
+        t.disabled = false;
+      }
+    },
     forget: function (t) {
       ScoutData.forgetJob(t.dataset.id);
       cache = null;
