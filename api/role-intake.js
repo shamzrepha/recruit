@@ -26,12 +26,15 @@ const RECRUITER_CHAT_SYSTEM = [
 ].join('\n');
 
 const RECRUITER_GENERATE_SYSTEM = [
-  'You turn a hiring conversation into a clear job post and a list of requirements. Use only what the recruiter said; do not invent details.',
-  'Write the job description in plain, friendly language: a short intro about the company, what the person will do, and what you are looking for. 150 words at most.',
-  'Requirements are short, specific statements a CV can show or not show (for example "2+ years in customer support" or "Comfortable with Excel"). Mark each "must" or "nice". 4 to 8 requirements.',
-  'Also fill "location" (city or "Remote", or ""), "type" (one of Full-time, Part-time, Contract, Internship) and "workMode" (one of On-site, Hybrid, Remote). Use "Full-time" and "On-site" if not said.',
+  'You turn a job post, recruitment flyer, screenshot OCR text, or intake conversation into a clean role profile and structured requirements list.',
+  'Write the job description (jd) in plain, friendly language: a short summary of the role and responsibilities. 150 words at most.',
+  'CRITICAL INSTRUCTION FOR REQUIREMENTS:',
+  '- ONLY include candidate qualifications, skills, tools, and background (e.g. "3+ years in Python", "Degree in Accounting", "Experience managing fleets").',
+  '- NEVER include company descriptions, "We are hiring", deadlines, contact emails, phone numbers, salary ranges, benefits, or how to apply in the requirements list.',
+  '- Mark each requirement "must" (core necessity) or "nice" (bonus/preferred). Return 4 to 8 requirements total.',
+  'Also extract "title" (the role name), "company" (if mentioned, otherwise ""), "location" (city or "Remote"), "type" (Full-time, Part-time, Contract, Internship), and "workMode" (On-site, Hybrid, Remote).',
   'Return JSON only in this exact shape:',
-  '{"title": string, "summary": string, "jd": string, "location": string, "type": string, "workMode": string, "requirements": [{"text": string, "weight": "must" | "nice"}]}'
+  '{"title": string, "company": string, "summary": string, "jd": string, "location": string, "type": string, "workMode": string, "requirements": [{"text": string, "weight": "must" | "nice"}]}'
 ].join('\n');
 
 async function callGroq(apiKey, model, messages, attempt = 0) {
@@ -141,10 +144,15 @@ module.exports = async (req, res) => {
     }
 
     if (action === 'generate') {
+      const isFlyer = messages.length === 1 && messages[0].text;
       const transcriptText = messages.map(m => `${m.role === 'ai' ? 'Scout Assistant' : 'Recruiter'}: ${m.text}`).join('\n');
+      const userPrompt = isFlyer
+        ? `Analyze this job posting / recruitment flyer text extracted from an image or paste:\n\n${messages[0].text}\n\nExtract the role title, company (if any), location, clean job summary/responsibilities, and ONLY the candidate requirements (4 to 8 bullet points, distinguishing must-have from nice-to-have). Do NOT include company overview, salary, benefits, or contact/application instructions as requirements.`
+        : `Analyze this recruiter intake conversation and generate the role title, job description, and structured requirements list:\n\n${transcriptText}`;
+
       const groqMessages = [
         { role: 'system', content: RECRUITER_GENERATE_SYSTEM },
-        { role: 'user', content: `Analyze this recruiter intake conversation and generate the role title, job description, and structured requirements list:\n\n${transcriptText}` }
+        { role: 'user', content: userPrompt }
       ];
 
       const groqResp = await callGroq(apiKey, model, groqMessages);
@@ -156,6 +164,7 @@ module.exports = async (req, res) => {
 
       return res.status(200).json({
         title: clip(parsed.title || '', 100),
+        company: clip(parsed.company || '', 80),
         summary: clip(parsed.summary || '', 300),
         jd: clip(parsed.jd || '', 4000),
         location: clip(parsed.location || '', 80),

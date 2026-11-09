@@ -301,43 +301,66 @@
   }
 
   var NICE_HEAD = /nice[\s-]*to[\s-]*have|bonus|preferred|would be a plus|a plus/i;
-  var MUST_HEAD = /requirements?|qualifications?|must|you have|what you|looking for|about you/i;
+  var MUST_HEAD = /requirements?|qualifications?|must[\s-]*haves?|you have|what you (bring|need)|looking for|about you|who you are|eligibility|what we are looking for/i;
+  var SKIP_HEAD = /responsibilit|duties|what you will do|role overview|about (us|the company|the role|our team)|perks|benefits|what we offer|compensation|remuneration|how to apply|to apply|deadline|contact us|company background/i;
+  var NOISE_LINE = /@|https?:\/\/|www\.|\b(apply (now|here|to|via)|send (your )?cv|submit (your )?(application|cv)|deadline|salary|per month|per annum|\b₦|\$|£|€\b|we are hiring|vacancy announcement|call:|phone:|whatsapp:)\b/i;
+  var QUAL_LINE = /experience|years?|proficien|knowledge|familiar|skills?|degree|bachelor|master|fluent|able to|ability|proven|hands-on|certif|background in|understanding of|competenc|track record|built|shipped|worked at/i;
 
   function extractRequirements(text, nextId) {
     var lines = (text || '').split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
     var out = [];
-    var section = 'must';
+    var section = 'unknown';
     var bulletRe = /^([-*•●‣]|\d+[.)])\s+/;
     var hasBullets = lines.some(function (l) { return bulletRe.test(l); });
+    var hasReqSection = lines.some(function (l) { return (MUST_HEAD.test(l) || NICE_HEAD.test(l)) && l.length < 80; });
     var id = nextId || 1;
 
     lines.forEach(function (l) {
       var isBullet = bulletRe.test(l);
-      if (!isBullet && l.length < 60 && /:$|^[A-Z][A-Za-z\s\/&-]+$/.test(l)) {
+      var isHeader = !isBullet && l.length < 80 && (/:$/.test(l) || ((MUST_HEAD.test(l) || NICE_HEAD.test(l) || SKIP_HEAD.test(l)) && !QUAL_LINE.test(l)));
+      if (isHeader) {
         if (NICE_HEAD.test(l)) section = 'nice';
         else if (MUST_HEAD.test(l)) section = 'must';
+        else if (SKIP_HEAD.test(l)) section = 'skip';
         return;
       }
-      if (hasBullets && !isBullet) return;
+      if (NOISE_LINE.test(l)) return;
+      if (section === 'skip') return;
+
       var body = l.replace(bulletRe, '').trim();
-      var weight = section;
-      var pref = /^(nice[\s-]*to[\s-]*have|bonus|preferred)\s*[:\-]\s*/i;
-      if (pref.test(body)) { weight = 'nice'; body = body.replace(pref, ''); }
-      else if (/\((nice to have|bonus|preferred)\)|\ba plus\b/i.test(body)) weight = 'nice';
-      body = body.replace(/\s*\((nice to have|bonus|preferred)\)/i, '').replace(/[.;]$/, '');
-      if (body.length >= 5 && body.length <= 140) out.push({ id: 'r' + (id++), text: body, weight: weight });
+      if (body.length < 5 || body.length > 140) return;
+      if (NOISE_LINE.test(body)) return;
+
+      if (section === 'must' || section === 'nice') {
+        if (hasBullets && !isBullet) return;
+        var weight = section;
+        var pref = /^(nice[\s-]*to[\s-]*have|bonus|preferred)\s*[:\-]\s*/i;
+        if (pref.test(body)) { weight = 'nice'; body = body.replace(pref, ''); }
+        else if (/\((nice to have|bonus|preferred)\)|\ba plus\b/i.test(body)) weight = 'nice';
+        body = body.replace(/\s*\((nice to have|bonus|preferred)\)/i, '').replace(/[.;]$/, '');
+        out.push({ id: 'r' + (id++), text: body, weight: weight });
+        return;
+      }
+
+      if (!hasReqSection) {
+        if (QUAL_LINE.test(body)) {
+          var w = /nice|bonus|plus|preferred/i.test(body) ? 'nice' : 'must';
+          body = body.replace(/[.;]$/, '');
+          out.push({ id: 'r' + (id++), text: body, weight: w });
+        }
+      }
     });
 
     if (!out.length) {
-      var sentences = (text || '').split(/(?<=[.!?])\s+/);
+      var sentences = (text || '').split(/(?<=[.!?\n])\s+/);
       sentences.forEach(function (s) {
         s = s.trim().replace(/[.;]$/, '');
-        if (s.length >= 8 && s.length <= 140 && /experience|years|proficien|knowledge|familiar|skills?|degree/i.test(s)) {
+        if (s.length >= 8 && s.length <= 140 && QUAL_LINE.test(s) && !NOISE_LINE.test(s)) {
           out.push({ id: 'r' + (id++), text: s, weight: /nice|bonus|plus|preferred/i.test(s) ? 'nice' : 'must' });
         }
       });
     }
-    return out.slice(0, 20);
+    return out.slice(0, 15);
   }
 
   function guessName(cv, index) {

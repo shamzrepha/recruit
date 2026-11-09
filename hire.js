@@ -472,16 +472,50 @@
     newJobView();
   }
 
-  function extractFromPaste() {
+  async function extractFromPaste() {
     var ta = $('paste-jd');
     if (ta && ta.value) draft.jd = ta.value;
     var jd = draft.jd;
     if (!jd.trim()) { toast('Please paste job text or upload a screenshot first.'); return; }
-    var found = Engine.extractRequirements(jd);
-    draft.reqs = found.map(function (r) { return { id: uid(), text: r.text, weight: r.weight }; });
-    if (!draft.title) draft.title = String(jd).split('\n').map(function (l) { return l.trim(); }).filter(Boolean)[0] || '';
-    draft.title = draft.title.slice(0, 100);
-    draft.note = found.length ? '' : 'No bullet-point requirements were found. Add them below.';
+
+    var btn = document.querySelector('[data-act="wiz-extract"]');
+    var oldText = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Analysing role & extracting requirements...'; }
+
+    try {
+      var data = await postJson('/api/role-intake?action=generate', {
+        messages: [{ role: 'recruiter', text: jd }]
+      });
+      if (data.title) draft.title = data.title;
+      if (data.company && !draft.company) draft.company = data.company;
+      if (data.location) draft.location = data.location;
+      if (data.type && TYPES.indexOf(data.type) >= 0) draft.type = data.type;
+      if (data.workMode && MODES.indexOf(data.workMode) >= 0) draft.workMode = data.workMode;
+      if (data.summary || data.jd) draft.jd = (data.summary ? data.summary + '\n\n' : '') + (data.jd || '');
+      if (data.requirements && data.requirements.length) {
+        draft.reqs = data.requirements.map(function (r) {
+          return { id: uid(), text: r.text, weight: r.weight === 'nice' ? 'nice' : 'must' };
+        });
+      } else {
+        var found = Engine.extractRequirements(jd);
+        draft.reqs = found.map(function (r) { return { id: uid(), text: r.text, weight: r.weight }; });
+      }
+      draft.note = data.ai === false ? 'Requirements extracted from flyer. Review and edit them below.' : '';
+    } catch (err) {
+      // Offline / network fallback using the smart rule-based engine
+      var fallback = Engine.extractRequirements(jd);
+      draft.reqs = fallback.map(function (r) { return { id: uid(), text: r.text, weight: r.weight }; });
+      if (!draft.title) {
+        var lines = String(jd).split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+        var cleanTitle = lines.filter(function (l) { return l.length > 3 && l.length < 80 && !/we are|hiring|apply|salary|welcome|about us/i.test(l); })[0];
+        draft.title = cleanTitle || lines[0] || '';
+      }
+      draft.title = draft.title.slice(0, 100);
+      draft.note = draft.reqs.length ? 'Requirements extracted. Review and edit them below.' : 'No clear requirements were found. Add them below.';
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = oldText; }
+    }
+
     draft.step = 2;
     newJobView();
   }
