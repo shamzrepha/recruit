@@ -252,6 +252,7 @@
         id: j.id, title: j.title, company: j.company, jd: j.jd,
         location: j.location || '', type: j.type || 'Full-time', workMode: j.workMode || 'On-site',
         listed: j.listed !== false, code: j.code || '',
+        applyUrl: j.applyUrl || '', website: j.website || '', contacts: j.contacts || [],
         requirements: j.requirements, status: j.status, createdAt: j.createdAt
       };
     }
@@ -324,6 +325,9 @@
         type: pick(a.type, JOB_TYPES, 'Full-time'),
         workMode: pick(a.workMode, WORK_MODES, 'On-site'),
         listed: a.listed !== false,
+        applyUrl: clip(a.applyUrl, 250).trim(),
+        website: clip(a.website, 120).trim(),
+        contacts: Array.isArray(a.contacts) ? a.contacts.slice(0, 5).map(function (c) { return clip(c, 80); }) : [],
         requirements: reqs,
         status: 'open',
         createdAt: new Date(now()).toISOString()
@@ -355,6 +359,8 @@
       if (p.type != null) j.type = pick(p.type, JOB_TYPES, j.type || 'Full-time');
       if (p.workMode != null) j.workMode = pick(p.workMode, WORK_MODES, j.workMode || 'On-site');
       if (p.listed != null) j.listed = p.listed !== false;
+      if (p.applyUrl != null) j.applyUrl = clip(p.applyUrl, 250).trim();
+      if (p.website != null) j.website = clip(p.website, 120).trim();
       if (p.status === 'open' || p.status === 'closed') j.status = p.status;
       await kv.set('job:' + j.id, j, JOB_TTL);
       await kv.sadd('jobs:index', j.id);

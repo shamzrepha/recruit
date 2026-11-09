@@ -442,6 +442,13 @@ function fakeRes() {
   assert.ok(sentBody7.includes('Store Manager') && !sentBody7.includes('phone'), 'only the request and job titles are sent');
   delete process.env.GROQ_API_KEY;
 
+  const webEnrichHandler = require('../api/web-enrich.js');
+  res = fakeRes();
+  await webEnrichHandler({ method: 'POST', body: { title: 'Engineer', company: 'Acme', location: 'Lagos' } }, res);
+  assert.strictEqual(res.code, 200);
+  assert.ok(typeof res.body.query === 'string' && res.body.query.includes('Acme'));
+  assert.ok(Array.isArray(res.body.sources));
+
   console.log('All API & security tests passed successfully!');
 })().catch((e) => {
   console.error('API Test Error:', e);

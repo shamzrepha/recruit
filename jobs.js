@@ -345,7 +345,8 @@
     var link = ScoutData.applyLink(j).replace(location.origin, '');
     return '<article class="jd"><button type="button" class="crumb back-mobile" data-back>' + icon('arrow-left') + ' All jobs</button>' +
       '<header class="jd-head">' + avatar(j.company || j.title, true) + '<div><h2>' + esc(j.title) + '</h2><p class="jd-co">' + esc(j.company || 'Company') + (j.location ? ' &middot; ' + esc(j.location) : '') + '</p><div class="jc-badges">' + badges(j) + '<span class="badge soft">' + icon('clock') + ' ' + ago(j.createdAt) + '</span></div></div></header>' +
-      '<div class="jd-apply"><a class="btn lg" href="' + esc(link) + '">Apply to this role</a><button type="button" class="btn secondary lg" data-matchme>See how my CV matches</button></div>' +
+      '<div class="jd-apply"><a class="btn lg" href="' + esc(link) + '">Apply to this role</a><button type="button" class="btn secondary lg" data-matchme>See how my CV matches</button>' +
+      (j.applyUrl ? '<a class="btn ghost lg" href="' + esc(j.applyUrl) + '" target="_blank" rel="noopener">🌐 Verified company post &rarr;</a>' : '') + '</div>' +
       (j.jd ? '<section><h3>About the role</h3><div class="prose">' + esc(j.jd) + '</div></section>' : '') +
       (must.length ? '<section><h3>What we are looking for</h3><ul class="ticks">' + must.map(function (r) { return '<li>' + icon('check') + esc(r.text) + '</li>'; }).join('') + '</ul></section>' : '') +
       (nice.length ? '<section><h3>Nice to have</h3><ul class="ticks soft">' + nice.map(function (r) { return '<li>' + icon('check') + esc(r.text) + '</li>'; }).join('') + '</ul></section>' : '') +
