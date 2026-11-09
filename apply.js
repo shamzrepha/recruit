@@ -92,6 +92,11 @@
   function busy(msg) { var b = $('ocr-status'); b.hidden = !msg; if (msg) $('ocr-msg').textContent = msg; }
 
   CvTools.wireDropzone($('dropzone'), $('cvfile'), $('browse-btn'), handleFile);
+  var imgBtn = $('browse-img-btn'), imgInput = $('cvfile-img');
+  if (imgBtn && imgInput) {
+    imgBtn.addEventListener('click', function (e) { e.stopPropagation(); imgInput.click(); });
+    imgInput.addEventListener('change', function () { if (imgInput.files && imgInput.files[0]) handleFile(imgInput.files[0]); });
+  }
 
   async function handleFile(file) {
     uploadError(''); currentImageBase64 = null; $('vision-box').hidden = true; busy('Reading your CV...');

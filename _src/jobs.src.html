@@ -35,12 +35,16 @@
       <div id="saved-cv" class="card pad row between" hidden style="margin-bottom:20px"></div>
       <div class="two-col">
         <div>
-          <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Choose a CV file or drop it here">
-            <input type="file" id="cvfile" accept=".pdf,image/png,image/jpeg,image/webp" class="visually-hidden" tabindex="-1">
+          <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload your CV file">
+            <input type="file" id="cvfile" accept="application/pdf,.pdf,text/plain,.txt" class="visually-hidden" tabindex="-1">
+            <input type="file" id="cvfile-img" accept="image/*" class="visually-hidden" tabindex="-1">
             <div class="dz-ic"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg></div>
-            <div class="dz-title">Drop your CV here</div>
-            <p class="hint">PDF, or a photo or screenshot (PNG, JPG, WEBP). Up to 5 MB.</p>
-            <button type="button" class="btn" id="browse-btn">Choose a file</button>
+            <div class="dz-title">Upload your CV</div>
+            <p class="hint">Upload your PDF resume or document. Up to 5 MB.</p>
+            <div class="row" style="gap:8px;justify-content:center;flex-wrap:wrap">
+              <button type="button" class="btn" id="browse-btn">Upload CV file (PDF)</button>
+              <button type="button" class="btn secondary sm" id="browse-img-btn">Photo or screenshot</button>
+            </div>
           </div>
           <p id="upload-msg" class="field-msg error" role="alert"></p>
           <div id="ocr-status" class="status-box" hidden role="status"><div class="spinner" aria-hidden="true"></div><p id="ocr-msg">Reading&hellip;</p></div>

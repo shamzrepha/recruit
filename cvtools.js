@@ -41,6 +41,11 @@
     if (!file) throw new Error('Choose a file first.');
     if (file.size > 5 * 1024 * 1024) throw new Error('That file is over 5 MB. Try a smaller photo or a screenshot.');
     var name = file.name || '', type = file.type || '';
+    if (type === 'text/plain' || /\.txt$/i.test(name)) {
+      status('Reading your text file...');
+      var textContent = await file.text();
+      return { text: textContent.trim(), image: null };
+    }
     if (type === 'application/pdf' || /\.pdf$/i.test(name)) {
       status('Reading your PDF on this device...');
       await loadScript(PDF_URL);

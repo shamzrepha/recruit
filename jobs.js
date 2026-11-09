@@ -88,6 +88,11 @@
   }
 
   CvTools.wireDropzone($('dropzone'), $('cvfile'), $('browse-btn'), handleFile);
+  var imgBtn = $('browse-img-btn'), imgInput = $('cvfile-img');
+  if (imgBtn && imgInput) {
+    imgBtn.addEventListener('click', function (e) { e.stopPropagation(); imgInput.click(); });
+    imgInput.addEventListener('change', function () { if (imgInput.files && imgInput.files[0]) handleFile(imgInput.files[0]); });
+  }
   $('btn-paste').addEventListener('click', function () { $('paste-box').hidden = false; $('paste-cv').focus(); });
   $('btn-use-paste').addEventListener('click', function () {
     var t = $('paste-cv').value.trim();

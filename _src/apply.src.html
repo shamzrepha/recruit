@@ -35,11 +35,15 @@
 
     <section id="upload-section" aria-labelledby="upload-h">
       <div class="block-head"><h2 id="upload-h">Upload your CV</h2><p>A PDF, photo or screenshot, up to 5 MB.</p></div>
-      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Choose a CV file or drop it here">
-        <input type="file" id="cvfile" accept=".pdf,image/png,image/jpeg,image/webp" class="visually-hidden" tabindex="-1">
-        <div class="display">Drop your CV here</div>
-        <p class="hint">PDF, PNG, JPG or WEBP</p>
-        <button type="button" class="btn secondary" id="browse-btn">Choose a file</button>
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload your CV file">
+        <input type="file" id="cvfile" accept="application/pdf,.pdf,text/plain,.txt" class="visually-hidden" tabindex="-1">
+        <input type="file" id="cvfile-img" accept="image/*" class="visually-hidden" tabindex="-1">
+        <div class="display">Upload your CV</div>
+        <p class="hint">Upload your PDF resume or document (up to 5 MB).</p>
+        <div class="row" style="gap:8px;justify-content:center;flex-wrap:wrap">
+          <button type="button" class="btn" id="browse-btn">Upload CV file (PDF)</button>
+          <button type="button" class="btn secondary sm" id="browse-img-btn">Photo or screenshot</button>
+        </div>
       </div>
       <p id="upload-msg" class="field-msg error" role="alert"></p>
       <div id="ocr-status" class="status-box" hidden role="status"><div class="spinner" aria-hidden="true"></div><p id="ocr-msg">Reading your CV on this device&hellip;</p></div>
