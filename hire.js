@@ -939,6 +939,7 @@
       }
     }
     view.innerHTML = html;
+    if (ui.showAdd) wireBulkCvDropzone();
     var host = $('drawer-host');
     var wasOpen = Boolean(host.firstChild);
     host.innerHTML = drawer;
@@ -997,6 +998,108 @@
     return m;
   }
 
+  /* ---- bulk candidate CV handling ---- */
+
+  function wireBulkCvDropzone() {
+    var drop = $('bulk-cv-dropzone'), fileInput = $('recruiter-bulk-cvs'), btn = $('btn-select-bulk-cvs');
+    if (!drop || !fileInput) return;
+    if (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        fileInput.click();
+      });
+    }
+    drop.addEventListener('click', function (e) {
+      if (e.target !== btn) fileInput.click();
+    });
+    drop.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      drop.classList.add('drag');
+    });
+    drop.addEventListener('dragleave', function () {
+      drop.classList.remove('drag');
+    });
+    drop.addEventListener('drop', function (e) {
+      e.preventDefault();
+      drop.classList.remove('drag');
+      var dt = e.dataTransfer;
+      if (dt && dt.files && dt.files.length) {
+        handleBatchCvs(dt.files);
+      }
+    });
+    fileInput.addEventListener('change', function () {
+      if (fileInput.files && fileInput.files.length) {
+        handleBatchCvs(fileInput.files);
+      }
+    });
+  }
+
+  async function handleBatchCvs(files) {
+    if (!files || !files.length || !cache || !cache.job) return;
+    var list = Array.from(files);
+    var job = cache.job;
+    ui.screening = 'Reading ' + list.length + ' CV' + (list.length === 1 ? '' : 's') + ' with AI...';
+    rerender();
+    toast('Processing ' + list.length + ' CV' + (list.length === 1 ? '' : 's') + '...');
+
+    var newlyAdded = [];
+    for (var i = 0; i < list.length; i++) {
+      var f = list[i];
+      ui.screening = 'Reading (' + (i + 1) + '/' + list.length + '): ' + f.name + '...';
+      rerender();
+      try {
+        var r = await CvTools.extract(f, function (m) {
+          ui.screening = '(' + (i + 1) + '/' + list.length + ') ' + f.name + ': ' + m;
+          rerender();
+        });
+        var text = (r && r.text) ? r.text.trim() : '';
+        if (!text && r && r.image) {
+          ui.screening = '(' + (i + 1) + '/' + list.length + ') OCR image scan for ' + f.name + '...';
+          rerender();
+          try { text = await CvTools.vision(r.image); } catch (e) { text = ''; }
+        }
+        if (text.length < 20) {
+          toast('Could not extract readable text from ' + f.name);
+          continue;
+        }
+
+        ui.screening = '(' + (i + 1) + '/' + list.length + ') Parsing profile for ' + f.name + '...';
+        rerender();
+        var p = await CvTools.parse(text);
+        var prof = (p && p.profile) || {};
+        var name = (prof.name && prof.name.trim()) || f.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') || 'Candidate';
+
+        var addRes = await call('candidateAdd', {
+          jobId: job.id,
+          key: cache.key,
+          name: name,
+          cv: text,
+          phone: prof.phone || '',
+          email: prof.email || '',
+          location: prof.location || '',
+          profile: prof,
+          consent: true,
+          source: 'recruiter_bulk_upload'
+        });
+
+        cache.cands.unshift(addRes.candidate);
+        newlyAdded.push(addRes.candidate);
+      } catch (err) {
+        console.warn('Batch CV error on ' + f.name, err);
+        toast('Failed ' + f.name + ': ' + err.message);
+      }
+    }
+
+    ui.screening = '';
+    ui.showAdd = false;
+    rerender();
+
+    if (newlyAdded.length) {
+      toast('Added ' + plural(newlyAdded.length, 'candidate') + ' to pipeline. Scoring now...');
+      await screenCands(newlyAdded);
+    }
+  }
+
   /* ---- pipeline tab ---- */
 
   function pipelineTab() {
@@ -1008,11 +1111,14 @@
     if (!rows.length && !ui.showAdd) {
       var link = ScoutData.applyLink(j);
       return '<div class="empty-state"><div class="empty-ic">' + icon('users') + '</div><h2>No applicants yet</h2>' +
-        '<p>Send candidates this role&rsquo;s apply link' + (j.listed ? ', or they can find it on the public job board' : '') + '. They upload a CV, confirm their details, and appear here ranked against your requirements.</p>' +
-        '<div class="link-box"><code>' + esc(link) + '</code><button class="btn sm" data-act="copy-apply">' + icon('copy') + ' Copy</button></div>' +
+        '<p>Upload received candidate resumes in bulk, or share this role&rsquo;s public apply link.</p>' +
+        '<div class="row" style="margin:16px 0;gap:8px;justify-content:center">' +
+          '<button class="btn" data-act="toggle-add">' + icon('upload') + ' Upload candidate CVs (Batch)</button>' +
+          '<a class="btn ghost" href="' + esc(link) + '" target="_blank" rel="noopener">Preview public apply link</a>' +
+        '</div>' +
+        '<div class="link-box"><code>' + esc(link) + '</code><button class="btn sm" data-act="copy-apply">' + icon('copy') + ' Copy apply link</button></div>' +
         (app.mode === 'local' ? '<div class="banner info" style="margin-top:16px"><span><strong>Heads up:</strong> this site is saving to this browser only, so applications must be made in this same browser. See Share to turn on shared storage.</span></div>' : '') +
-        '<div class="row"><button class="btn secondary" data-act="toggle-add">Add a CV manually</button>' +
-        '<a class="btn ghost" href="' + esc(link) + '" target="_blank" rel="noopener">Preview as a candidate</a></div></div>';
+      '</div>';
     }
 
     if (ui.screening) out += '<div class="banner info" role="status" style="margin-bottom:16px"><span><strong>Screening&hellip;</strong> ' + esc(ui.screening) + '</span></div>';
@@ -1026,15 +1132,32 @@
     out += '<div class="toolbar"><div class="row">' +
       '<label class="search-mini"><span class="visually-hidden">Search applicants</span>' + icon('search') + '<input type="search" id="cand-search" data-field="ui.search" placeholder="Search applicants" value="' + esc(ui.search) + '"></label>' +
       '<div class="seg-toggle" role="group" aria-label="View"><button type="button" data-act="view" data-v="board" aria-pressed="' + (ui.view === 'board') + '">' + icon('board') + ' Board</button><button type="button" data-act="view" data-v="list" aria-pressed="' + (ui.view === 'list') + '">' + icon('list') + ' List</button></div></div>' +
-      '<div class="row"><button class="btn secondary sm" data-act="toggle-add">' + icon('plus') + ' Add a CV</button>' +
+      '<div class="row"><button class="btn secondary sm" data-act="toggle-add">' + icon('upload') + ' Upload / Add CVs</button>' +
       '<button class="btn secondary sm" data-act="refresh">Refresh</button>' +
       '<button class="btn secondary sm" data-act="csv">' + icon('download') + ' CSV</button></div></div>';
 
     if (ui.showAdd) {
-      out += '<form class="card pad stack" data-form="add-cv" style="margin-bottom:20px">' +
-        '<div class="field"><label class="label" for="add-name">Name</label><input id="add-name" type="text" maxlength="80" placeholder="Candidate name"></div>' +
-        '<div class="field"><label class="label" for="add-cv">CV text</label><textarea id="add-cv" rows="6" maxlength="12000" placeholder="Paste the CV as plain text" required></textarea></div>' +
-        '<div class="row"><button type="submit" class="btn">Add candidate</button><button type="button" class="btn ghost" data-act="toggle-add">Cancel</button></div></form>';
+      out += '<div class="card pad stack" style="margin-bottom:20px;border:1.5px solid var(--blue,#2563eb);background:var(--panel)">' +
+        '<div class="row between">' +
+          '<div><h3 style="margin:0 0 4px;font-size:1.05rem">Batch Upload Candidate CVs</h3>' +
+          '<p class="muted small" style="margin:0">Drop or select multiple resumes (PDFs, screenshots, or text). Scout will parse and rank each one against this job.</p></div>' +
+          '<button type="button" class="btn ghost sm" data-act="toggle-add">&times; Close</button>' +
+        '</div>' +
+        '<div id="bulk-cv-dropzone" class="dropzone" style="margin-top:12px;padding:24px 16px;text-align:center;border:1.5px dashed var(--line-strong);border-radius:8px;background:var(--surface,#fff);cursor:pointer">' +
+          '<div style="font-size:1.6rem;margin-bottom:6px">' + icon('upload') + '</div>' +
+          '<strong>Drop multiple candidate CVs here</strong>' +
+          '<p class="muted small" style="margin:4px 0 12px">Supports PDF, JPG, PNG or TXT (select 1, 5, or 20 CVs at once)</p>' +
+          '<button type="button" class="btn sm" id="btn-select-bulk-cvs">Select CV files from device</button>' +
+          '<input type="file" id="recruiter-bulk-cvs" multiple accept="application/pdf,.pdf,image/*,text/plain,.txt" style="display:none">' +
+        '</div>' +
+        '<details style="margin-top:10px">' +
+          '<summary class="link-btn small">Or paste a single CV as plain text</summary>' +
+          '<form data-form="add-cv" style="margin-top:10px" class="stack">' +
+            '<div class="field"><label class="label" for="add-name">Name</label><input id="add-name" type="text" maxlength="80" placeholder="Candidate name"></div>' +
+            '<div class="field"><label class="label" for="add-cv">CV text</label><textarea id="add-cv" rows="5" maxlength="12000" placeholder="Paste the CV as plain text" required></textarea></div>' +
+            '<div class="row"><button type="submit" class="btn sm">Add candidate</button></div>' +
+          '</form>' +
+        '</details></div>';
     }
 
     var qs = ui.search.trim().toLowerCase();

@@ -712,13 +712,23 @@
       var cv = clip(a.cv, 12000).trim();
       if (cv.length < 20) throw fail(400, 'Paste the CV text first.');
       var t = now();
+      var links = a.links || {};
       var c = {
         id: 'c_' + randHex(16),
         jobId: job.id,
         name: clip(a.name, 80).trim() || 'Unnamed candidate',
-        phone: '', email: '', location: '', links: { linkedin: '', github: '' },
-        cv: cv, consent: false, source: 'manual', stage: 'new', screen: null,
-        contactedAt: null, interview: null,
+        phone: clip(a.phone, 30),
+        email: clip(a.email, 80),
+        location: clip(a.location, 80),
+        links: { linkedin: cleanUrl(links.linkedin), github: cleanUrl(links.github) },
+        cv: cv,
+        profile: cleanProfile(a.profile),
+        consent: a.consent !== false,
+        source: clip(a.source || 'manual', 30),
+        stage: 'new',
+        screen: null,
+        contactedAt: null,
+        interview: null,
         createdAt: new Date(t).toISOString(),
         expiresAt: new Date(t + CANDIDATE_TTL).toISOString()
       };
