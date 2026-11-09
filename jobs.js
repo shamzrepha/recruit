@@ -20,6 +20,21 @@
     for (var i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0;
     return '<span class="logo' + (big ? ' lg' : '') + '" style="background:' + HUES[h % HUES.length] + '" aria-hidden="true">' + esc(n.charAt(0).toUpperCase()) + '</span>';
   }
+  function toast(msg) {
+    var host = $('toast-host');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'toast-host';
+      host.className = 'toast-host';
+      document.body.appendChild(host);
+    }
+    var t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    host.innerHTML = '';
+    host.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 2600);
+  }
   function badges(j) { return '<span class="badge">' + esc(j.type) + '</span><span class="badge">' + esc(j.workMode) + '</span>'; }
   var STATE = { met: 'Stated', not_stated: 'Not stated', not_met: 'Contradicted' };
 
@@ -197,6 +212,9 @@
     st.matches = out; st.selected = {};
     var done = myApps().map(function (a) { return a.jobId; });
     out.forEach(function (m) { if (done.indexOf(m.job.id) >= 0) m.applied = true; });
+    if (out.length && !out[0].applied) {
+      st.selected[out[0].job.id] = true;
+    }
     paintMatches();
   }
 
@@ -229,12 +247,51 @@
           bar +
           '<p class="mc-sum">' + esc(m.sug.text) + '. ' + met.length + ' of ' + j.requirements.length + ' requirements shown on your CV' + (open ? ', ' + open + ' not stated' : '') + (gap ? ', ' + gap + ' contradicted' : '') + '.</p>' +
           '<p class="mc-rank">' + rankLine(m) + '</p>' +
-          '<details class="why"><summary>Why this score</summary><ul class="why-list">' + j.requirements.map(function (r) {
+          '<div class="row" style="margin-top:10px;gap:10px;align-items:center">' +
+          (m.applied
+            ? '<span class="chip ok">' + icon('check') + ' Application sent</span>'
+            : '<button type="button" class="btn sm" data-apply-id="' + id + '">' + icon('plus') + ' Apply to this role</button>') +
+          '</div>' +
+          '<details class="why" style="margin-top:8px"><summary>Why this score</summary><ul class="why-list">' + j.requirements.map(function (r) {
             var k = by[r.id] || { status: 'not_stated', note: '', evidence: '' };
             return '<li><span class="st ' + k.status + '"><span class="seg s-' + k.status + '"></span>' + STATE[k.status] + '</span><span>' + esc(r.text) + (k.status === 'not_stated' ? '<small>Add it to your CV if it applies to you.</small>' : '') + (k.evidence ? '<small>&ldquo;' + esc(k.evidence) + '&rdquo;</small>' : '') + '</span></li>';
           }).join('') + '</ul></details></div></li>';
       }).join('') + '</ul>';
     updateBar();
+  }
+
+  async function applyToRole(jobId) {
+    var m = st.matches.filter(function (x) { return x.job.id === jobId; })[0];
+    if (!m || m.applied) return false;
+    try {
+      var candName = (st.profile && st.profile.name) || (st.me && st.me.name) || 'Applicant';
+      var res = await call('apply', {
+        jobId: m.job.id,
+        name: candName,
+        cv: st.text,
+        phone: (st.me && st.me.phone) || '',
+        email: (st.me && st.me.email) || '',
+        location: (st.me && st.me.location) || '',
+        consent: st.me ? st.me.consent !== false : true,
+        links: {
+          linkedin: st.profile && st.profile.links && st.profile.links.linkedin,
+          github: st.profile && st.profile.links && (st.profile.links.github || st.profile.links.portfolio)
+        },
+        profile: st.profile,
+        session: ScoutData.session() || undefined
+      });
+      m.applied = true;
+      var apps = myApps();
+      apps.unshift({ token: res.token, jobId: m.job.id, title: m.job.title, company: m.job.company, at: new Date().toISOString() });
+      saveApps(apps);
+      paintApps();
+      toast('Application submitted for ' + m.job.title + '!');
+      paintMatches();
+      return true;
+    } catch (err) {
+      toast('Could not apply: ' + err.message);
+      return false;
+    }
   }
 
   function pickedIds() { return Object.keys(st.selected).filter(function (k) { return st.selected[k]; }); }
@@ -252,6 +309,18 @@
     st.selected[id] = e.target.checked;
     e.target.closest('.match-card').classList.toggle('picked', e.target.checked);
     updateBar();
+  });
+  $('match-results').addEventListener('click', async function (e) {
+    var btn = e.target.closest('button[data-apply-id]');
+    if (!btn) return;
+    var id = btn.dataset.applyId;
+    btn.disabled = true;
+    btn.textContent = 'Applying...';
+    var ok = await applyToRole(id);
+    if (!ok) {
+      btn.disabled = false;
+      btn.textContent = 'Apply to this role';
+    }
   });
   $('btn-select-best').addEventListener('click', function () {
     st.matches.forEach(function (m) { if (!m.applied && m.sc.now >= 60) st.selected[m.job.id] = true; });
