@@ -95,21 +95,22 @@ module.exports = async function handler(req, res) {
     } catch (e) {}
   }
 
-  // If AI is available, have it synthesize and extract clean contact details & verified application URL
-  if (apiKey && searchResults.length > 0) {
+  // If AI is available, synthesize and extract clean contact details & verified application URL
+  if (apiKey) {
     try {
       const prompt = [
         `Role: ${title}`,
         `Company: ${company}`,
         `Location: ${location}`,
+        extra ? `Details: ${extra}` : '',
         `Web search results:`,
         JSON.stringify(searchResults, null, 2)
-      ].join('\n');
+      ].filter(Boolean).join('\n');
 
       const messages = [
         {
           role: 'system',
-          content: 'You analyze web search results to find legitimate application links, official company career portals, contact info, and role details. Return JSON only: {"officialApplyUrl": string, "companyWebsite": string, "contacts": string[], "verified": boolean, "summary": string}'
+          content: 'You identify legitimate application links, official company career portals (e.g. company careers page, greenhouse.io, lever.co, workday), official company website, and contacts. If web results are present, use them. If web results are empty, use your knowledge of the company and industry standard URLs. Return JSON only in this shape: {"officialApplyUrl": string, "companyWebsite": string, "contacts": string[], "verified": boolean, "summary": string}'
         },
         { role: 'user', content: prompt }
       ];
@@ -140,6 +141,14 @@ module.exports = async function handler(req, res) {
       }
     } catch (e) {
       // Fall through to searchResults heuristics
+    }
+  }
+
+  if (!officialUrl && company) {
+    const slug = company.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (slug) {
+      companyWebsite = companyWebsite || `https://${slug}.com`;
+      officialUrl = `https://${slug}.com/careers`;
     }
   }
 
